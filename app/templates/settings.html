@@ -1,0 +1,108 @@
+{% extends "layout.html" %}
+{% block title %}Settings — GDT Invoice Crawler{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-sliders"></i> Application Settings</div>
+      <div class="card-body">
+        <div id="save-alert" class="alert mb-3" style="display:none;"></div>
+
+        <h6 class="mb-3" style="color:#79c0ff; font-size:11px; letter-spacing:0.08em; text-transform:uppercase;">Crawler</h6>
+        <div class="row g-2 mb-4">
+          <div class="col-md-4">
+            <label class="form-label">Max Retries</label>
+            <input type="number" name="crawler_max_retries" class="form-control setting-input" value="{{ settings.crawler_max_retries }}" min="1" max="20" />
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Page Size</label>
+            <select name="crawler_page_size" class="form-select setting-input">
+              <option value="10" {{ 'selected' if settings.crawler_page_size == '10' }}>10</option>
+              <option value="20" {{ 'selected' if settings.crawler_page_size == '20' }}>20</option>
+              <option value="50" {{ 'selected' if settings.crawler_page_size == '50' }}>50</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Delay between rows (ms)</label>
+            <input type="number" name="crawler_delay_ms" class="form-control setting-input" value="{{ settings.crawler_delay_ms }}" min="100" max="5000" />
+          </div>
+        </div>
+
+        <h6 class="mb-3" style="color:#d29922; font-size:11px; letter-spacing:0.08em; text-transform:uppercase;">Playwright</h6>
+        <div class="row g-2 mb-4">
+          <div class="col-md-4">
+            <label class="form-label">Headless Mode</label>
+            <select name="playwright_headless" class="form-select setting-input">
+              <option value="true" {{ 'selected' if settings.playwright_headless == 'true' }}>Headless (true)</option>
+              <option value="false" {{ 'selected' if settings.playwright_headless == 'false' }}>Visible (false)</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Timeout (ms)</label>
+            <input type="number" name="playwright_timeout" class="form-control setting-input" value="{{ settings.playwright_timeout }}" min="5000" />
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Slow Motion (ms)</label>
+            <input type="number" name="playwright_slow_mo" class="form-control setting-input" value="{{ settings.playwright_slow_mo }}" min="0" max="2000" />
+          </div>
+        </div>
+
+        <button class="btn btn-brand" onclick="saveSettings()">
+          <i class="bi bi-floppy"></i> Save Settings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-info-circle"></i> System Info</div>
+      <div class="card-body" style="font-size:12px; font-family:var(--font-mono);">
+        <div class="mb-2"><span class="text-muted">Python:</span> 3.11+</div>
+        <div class="mb-2"><span class="text-muted">Flask:</span> 3.x</div>
+        <div class="mb-2"><span class="text-muted">Playwright:</span> async chromium</div>
+        <hr style="border-color:var(--border);" />
+        <div class="text-muted mb-2">⚙ Settings are persisted to SQLite and override .env values at runtime.</div>
+        <div class="text-muted">⚠ Restart the crawler for Playwright settings to take effect.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function saveSettings() {
+  const inputs = document.querySelectorAll('.setting-input');
+  const data = {};
+  inputs.forEach(inp => {
+    data[inp.name] = inp.value;
+  });
+
+  const alertEl = document.getElementById('save-alert');
+  try {
+    const res = await fetch('/settings/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    alertEl.style.display = 'block';
+    if (result.ok) {
+      alertEl.className = 'alert';
+      alertEl.style.cssText = 'display:block; background:rgba(63,185,80,0.1); border:1px solid #3fb950; color:#3fb950;';
+      alertEl.innerHTML = `<i class="bi bi-check-circle"></i> Settings saved: ${result.saved.join(', ')}`;
+    } else {
+      alertEl.style.cssText = 'display:block; background:rgba(248,81,73,0.1); border:1px solid #f85149; color:#f85149;';
+      alertEl.innerHTML = `<i class="bi bi-x-circle"></i> Error saving settings.`;
+    }
+  } catch(e) {
+    alertEl.style.cssText = 'display:block;';
+    alertEl.innerHTML = `Error: ${e}`;
+  }
+  setTimeout(() => alertEl.style.display = 'none', 3000);
+}
+</script>
+{% endblock %}

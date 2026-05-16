@@ -1,0 +1,321 @@
+{% extends "layout.html" %}
+{% block title %}Crawler — GDT Invoice Crawler{% endblock %}
+{% block page_title %}Crawler Control{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+
+  <!-- ── Control Panel ─────────────────────── -->
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-robot"></i> Start New Crawl</div>
+      <div class="card-body p-3">
+        <div class="mb-3">
+          <label class="form-label">GDT Username</label>
+          <input type="text" id="inp-username" class="form-control" placeholder="Tên đăng nhập" autocomplete="off" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input type="password" id="inp-password" class="form-control" placeholder="Mật khẩu" autocomplete="new-password" />
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col">
+            <label class="form-label">Start Date</label>
+            <input type="text" id="inp-start" class="form-control" placeholder="dd/MM/yyyy" value="{{ status.running_job.start_date if status.running_job else '' }}" />
+          </div>
+          <div class="col">
+            <label class="form-label">End Date</label>
+            <input type="text" id="inp-end" class="form-control" placeholder="dd/MM/yyyy" value="{{ status.running_job.end_date if status.running_job else '' }}" />
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button id="btn-start" class="btn btn-brand flex-grow-1" onclick="startCrawl()">
+            <i class="bi bi-play-fill"></i> Start Crawl
+          </button>
+          <button id="btn-stop" class="btn btn-outline-danger" onclick="stopCrawl()" disabled>
+            <i class="bi bi-stop-fill"></i> Stop
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="card mt-3" id="progress-card" style="display:none !important;">
+      <div class="card-header"><i class="bi bi-activity"></i> Progress</div>
+      <div class="card-body p-3">
+        <div class="d-flex justify-content-between mb-1" style="font-size:12px;">
+          <span id="prog-label">Initialising…</span>
+          <span id="prog-pct">0%</span>
+        </div>
+        <div class="progress" style="height:8px; background:#30363d;">
+          <div id="prog-bar" class="progress-bar" style="background:var(--brand); width:0%; transition:width 0.4s;"></div>
+        </div>
+        <div class="row mt-3" style="font-size:12px; font-family:var(--font-mono);">
+          <div class="col text-center">
+            <div id="stat-total" class="fw-bold" style="font-size:20px; color:var(--brand);">0</div>
+            <div class="text-muted">Total</div>
+          </div>
+          <div class="col text-center">
+            <div id="stat-done" class="fw-bold" style="font-size:20px; color:#3fb950;">0</div>
+            <div class="text-muted">Done</div>
+          </div>
+          <div class="col text-center">
+            <div id="stat-fail" class="fw-bold" style="font-size:20px; color:#f85149;">0</div>
+            <div class="text-muted">Failed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Log Terminal ───────────────────────── -->
+  <div class="col-md-7">
+    <!-- Captcha Widget -->
+    <div id="captcha-widget" style="display:none; margin-top:10px; padding:12px;
+        background:#161b22; border:1px solid #30363d; border-radius:8px;">
+      <div style="font-size:12px; color:#8b949e; margin-bottom:8px;">
+        🖼 Nhập mã captcha bên dưới:
+      </div>
+      <img id="captcha-img" src="" alt="captcha"
+          style="display:block; border-radius:4px; margin-bottom:8px;
+                  image-rendering:pixelated; height:48px;" />
+      <div class="d-flex gap-2">
+        <input id="captcha-input" type="text" class="form-control form-control-sm"
+              placeholder="Nhập mã…" maxlength="10"
+              style="font-family:var(--font-mono); letter-spacing:3px; text-transform:uppercase;
+                      background:#0d1117; border-color:#30363d; color:#e6edf3; width:140px;"
+              onkeydown="if(event.key==='Enter') submitCaptcha()" />
+        <button class="btn btn-sm btn-brand" onclick="submitCaptcha()">
+          <i class="bi bi-check-lg"></i> Xác nhận
+        </button>
+        <button class="btn btn-sm" style="background:#30363d; color:#8b949e;"
+                onclick="refreshCaptcha()">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+    </div>
+    <!--  -->
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-terminal"></i> Live Logs
+        <button class="btn btn-sm ms-auto" style="background:#30363d; color:#e6edf3; font-size:11px;" onclick="clearLogs()">
+          Clear
+        </button>
+      </div>
+      <div class="card-body p-2">
+        <div id="log-terminal" class="log-terminal" style="max-height:460px;">
+<span class="log-info">▶ Waiting for crawl to start…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Recent Jobs ────────────────────────── -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clock-history"></i> Recent Jobs</div>
+      <div class="card-body p-0">
+        <table class="table mb-0">
+          <thead>
+            <tr>
+              <th>ID</th><th>Date Range</th><th>Status</th>
+              <th>Downloaded</th><th>Failed</th><th>Started</th>
+            </tr>
+          </thead>
+          <tbody id="jobs-tbody">
+            {% for job in recent_jobs %}
+            <tr>
+              <td><code>#{{ job.id }}</code></td>
+              <td>{{ job.start_date }} → {{ job.end_date }}</td>
+              <td><span class="badge badge-status-{{ job.status }}">{{ job.status | upper }}</span></td>
+              <td>{{ job.downloaded_invoices }}</td>
+              <td>{{ job.failed_invoices }}</td>
+              <td style="font-family:var(--font-mono); font-size:11px;">
+                {{ job.start_time.strftime('%d/%m/%Y %H:%M') if job.start_time else '—' }}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center text-muted py-3">No jobs yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentJobId = null;
+let isRunning = {{ 'true' if status.is_running else 'false' }};
+
+const logEl = document.getElementById('log-terminal');
+const btnStart = document.getElementById('btn-start');
+const btnStop = document.getElementById('btn-stop');
+const progCard = document.getElementById('progress-card');
+// ── Captcha manual input ──────────────────────────────────
+const captchaWidget = document.getElementById('captcha-widget');
+const captchaImg    = document.getElementById('captcha-img');
+const captchaInput  = document.getElementById('captcha-input');
+
+socket.on('crawler_captcha', (data) => {
+  captchaImg.src = 'data:image/png;base64,' + data.image;
+  captchaInput.value = '';
+  captchaWidget.style.display = 'block';
+  setTimeout(() => captchaInput.focus(), 100);
+  appendLog('🖼 Vui lòng nhập mã captcha trong ô bên dưới…', 'warn');
+});
+
+// Khi crawl kết thúc hoặc thành công → ẩn widget
+socket.on('crawler_done', () => {
+  captchaWidget.style.display = 'none';
+});
+
+async function submitCaptcha() {
+  const text = captchaInput.value.trim().toUpperCase();
+  if (!text) {
+    captchaInput.focus();
+    return;
+  }
+  captchaWidget.style.display = 'none';
+  appendLog(`⌨ Captcha submitted: ${text}`, 'info');
+  try {
+    await fetch('/crawler/api/captcha', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer: text }),
+    });
+  } catch (e) {
+    appendLog(`❌ Captcha submit lỗi: ${e}`, 'error');
+  }
+}
+
+async function requestRefreshCaptcha() {
+  appendLog('🔄 Đang yêu cầu làm mới captcha…', 'info');
+  try {
+    await fetch('/crawler/api/captcha/refresh', { method: 'POST' });
+  } catch (e) {
+    appendLog(`❌ Refresh thất bại: ${e}`, 'error');
+  }
+}
+
+function appendLog(msg, level = 'info') {
+  const line = document.createElement('div');
+  line.className = `log-${level}`;
+  const ts = new Date().toLocaleTimeString('vi-VN');
+  line.textContent = `[${ts}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function clearLogs() {
+  logEl.innerHTML = '<span class="log-info">▶ Logs cleared.</span>';
+}
+
+function setRunning(running) {
+  isRunning = running;
+  btnStart.disabled = running;
+  btnStop.disabled = !running;
+  progCard.style.display = running ? 'block' : 'none';
+
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  if (running) {
+    dot.classList.remove('idle');
+    txt.textContent = 'Crawler running…';
+  } else {
+    dot.classList.add('idle');
+    txt.textContent = 'Crawler idle';
+  }
+}
+
+async function startCrawl() {
+  const username = document.getElementById('inp-username').value.trim();
+  const password = document.getElementById('inp-password').value.trim();
+  const start_date = document.getElementById('inp-start').value.trim();
+  const end_date = document.getElementById('inp-end').value.trim();
+
+  if (!username || !password || !start_date || !end_date) {
+    appendLog('❌ All fields are required.', 'error');
+    return;
+  }
+
+  appendLog(`Starting crawl: ${start_date} → ${end_date}`, 'info');
+
+  try {
+    const res = await fetch('/crawler/api/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, start_date, end_date }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      currentJobId = data.job_id;
+      appendLog(`✓ Job #${data.job_id} started.`, 'success');
+      setRunning(true);
+    } else {
+      appendLog(`❌ ${data.error}`, 'error');
+    }
+  } catch (e) {
+    appendLog(`❌ Request failed: ${e}`, 'error');
+  }
+}
+
+async function stopCrawl() {
+  appendLog('⛔ Sending stop signal…', 'warn');
+  const res = await fetch('/crawler/api/stop', { method: 'POST' });
+  const data = await res.json();
+  appendLog(data.message, data.ok ? 'warn' : 'error');
+  if (data.ok) setRunning(false);
+}
+
+// SocketIO listeners
+socket.on('crawler_log', (data) => {
+  const msg = data.message || '';
+  let level = 'info';
+  if (msg.includes('✓') || msg.includes('success') || msg.includes('Success')) level = 'success';
+  else if (msg.includes('⚠') || msg.includes('Warning') || msg.includes('Retry')) level = 'warn';
+  else if (msg.includes('❌') || msg.includes('✗') || msg.includes('Error') || msg.includes('failed')) level = 'error';
+  appendLog(msg, level);
+});
+
+socket.on('crawler_progress', (data) => {
+  const total = data.total || 0;
+  const done = data.done || 0;
+  const fail = data.failed || 0;
+  const pct = total > 0 ? Math.round((done + fail) / total * 100) : 0;
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-done').textContent = done;
+  document.getElementById('stat-fail').textContent = fail;
+  document.getElementById('prog-bar').style.width = pct + '%';
+  document.getElementById('prog-pct').textContent = pct + '%';
+  document.getElementById('prog-label').textContent = `Processing invoice ${done + fail} of ${total}`;
+});
+
+socket.on('crawler_done', (data) => {
+  appendLog('✅ Crawl completed.', 'success');
+  setRunning(false);
+});
+
+// Poll status every 5s
+setInterval(async () => {
+  try {
+    const res = await fetch('/crawler/api/status');
+    const data = await res.json();
+    setRunning(data.is_running);
+    if (data.running_job) {
+      const j = data.running_job;
+      document.getElementById('stat-total').textContent = j.total_invoices;
+      document.getElementById('stat-done').textContent = j.downloaded_invoices;
+      document.getElementById('stat-fail').textContent = j.failed_invoices;
+    }
+  } catch(e) {}
+}, 5000);
+
+// Init state
+if (isRunning) setRunning(true);
+</script>
+{% endblock %}

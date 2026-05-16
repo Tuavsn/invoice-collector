@@ -1,0 +1,398 @@
+/* ============================================================
+   GDT Invoice Crawler — Main Stylesheet
+   ============================================================ */
+
+/* ── CSS Variables ─────────────────────────────────────────── */
+:root {
+  --brand:          #00d4aa;
+  --brand-dim:      #00a888;
+  --sidebar-bg:     #0d1117;
+  --sidebar-width:  240px;
+  --topbar-h:       58px;
+  --body-bg:        #161b22;
+  --card-bg:        #1c2128;
+  --border:         #30363d;
+  --text-muted:     #8b949e;
+  --font-main:      'IBM Plex Sans', sans-serif;
+  --font-mono:      'IBM Plex Mono', monospace;
+}
+
+/* ── Reset ─────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-main);
+  background: var(--body-bg);
+  color: #e6edf3;
+  min-height: 100vh;
+  display: flex;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+}
+
+.sidebar-brand {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-brand .logo-icon {
+  width: 32px; height: 32px;
+  background: var(--brand);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #000; font-size: 16px; font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sidebar-brand span {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e6edf3;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-brand small {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 16px 20px 6px;
+  text-transform: uppercase;
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  color: #8b949e;
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 400;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+
+.sidebar-nav a:hover {
+  color: #e6edf3;
+  background: rgba(255,255,255,0.04);
+}
+
+.sidebar-nav a.active {
+  color: var(--brand);
+  border-left-color: var(--brand);
+  background: rgba(0, 212, 170, 0.08);
+  font-weight: 600;
+}
+
+.sidebar-nav a i {
+  font-size: 15px;
+  width: 18px;
+  text-align: center;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── Crawler Status Dot ────────────────────────────────────── */
+.crawler-status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #3fb950;
+  display: inline-block;
+  margin-right: 6px;
+  animation: pulse 2s infinite;
+}
+
+.crawler-status-dot.idle {
+  background: #6e7681;
+  animation: none;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── Main Layout ───────────────────────────────────────────── */
+#main-content {
+  margin-left: var(--sidebar-width);
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#topbar {
+  height: var(--topbar-h);
+  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  position: sticky; top: 0; z-index: 50;
+}
+
+#topbar h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  color: #e6edf3;
+}
+
+.page-content {
+  padding: 24px;
+  flex: 1;
+}
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e6edf3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-footer {
+  background: transparent;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Stat Cards ────────────────────────────────────────────── */
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.stat-card .stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.stat-card .stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: #e6edf3;
+  line-height: 1;
+}
+
+.stat-card .stat-icon {
+  width: 38px; height: 38px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+/* ── Log Terminal ──────────────────────────────────────────── */
+.log-terminal {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #79c0ff;
+  max-height: 340px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-terminal .log-info    { color: #79c0ff; }
+.log-terminal .log-success { color: #3fb950; }
+.log-terminal .log-warn    { color: #d29922; }
+.log-terminal .log-error   { color: #f85149; }
+
+/* ── Table ─────────────────────────────────────────────────── */
+.table {
+  color: #e6edf3;
+  font-size: 13px;
+}
+
+.table > :not(caption) > * > * {
+  background-color: var(--card-bg);
+  border-color: var(--border);
+  padding: 10px 14px;
+}
+
+.table tbody tr:hover > * {
+  background: rgba(255,255,255,0.03);
+}
+
+/* Status badges */
+.badge-status-done    { background: rgba(63, 185, 80, 0.15);  color: #3fb950; }
+.badge-status-running { background: rgba(0, 212, 170, 0.15);  color: var(--brand); }
+.badge-status-failed  { background: rgba(248, 81, 73, 0.15);  color: #f85149; }
+.badge-status-pending { background: rgba(110, 118, 129, 0.15); color: #6e7681; }
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn-brand {
+  background: var(--brand);
+  color: #000;
+  border: none;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.btn-brand:hover {
+  background: var(--brand-dim);
+  color: #000;
+}
+
+/* ── Forms ─────────────────────────────────────────────────── */
+.form-control,
+.form-select {
+  background: #0d1117;
+  border-color: var(--border);
+  color: #e6edf3;
+  font-size: 13px;
+}
+
+.form-control:focus,
+.form-select:focus {
+  background: #0d1117;
+  border-color: var(--brand);
+  color: #e6edf3;
+  box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.15);
+}
+
+.form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Pagination ────────────────────────────────────────────── */
+.page-link {
+  background: var(--card-bg);
+  border-color: var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.page-link:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: var(--border);
+  color: #e6edf3;
+}
+
+.page-item.active .page-link {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #000;
+  font-weight: 600;
+}
+
+.page-item.disabled .page-link {
+  background: var(--card-bg);
+  border-color: var(--border);
+  color: #484f58;
+}
+
+/* ── Progress Bar ──────────────────────────────────────────── */
+.progress {
+  background: #30363d;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  background: var(--brand);
+  transition: width 0.4s ease;
+}
+
+/* ── Utility ───────────────────────────────────────────────── */
+.text-brand  { color: var(--brand) !important; }
+.border-brand { border-color: var(--brand) !important; }
+
+code {
+  background: rgba(0,212,170,0.1);
+  color: var(--brand);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+pre {
+  margin: 0;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* ── Alert overrides ───────────────────────────────────────── */
+.alert {
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  :root { --sidebar-width: 0px; }
+
+  #sidebar {
+    display: none;
+  }
+
+  #main-content {
+    margin-left: 0;
+  }
+
+  .page-content {
+    padding: 16px;
+  }
+}

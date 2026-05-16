@@ -1,0 +1,122 @@
+{% extends "layout.html" %}
+{% block title %}Invoice #{{ invoice.invoice_no }} — GDT{% endblock %}
+{% block page_title %}Invoice Detail{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{{ url_for('invoices.index') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to list
+  </a>
+</div>
+
+<div class="row g-3">
+  <!-- ── Metadata ───────────────────────────── -->
+  <div class="col-md-5">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle"></i> Invoice Metadata</div>
+      <div class="card-body p-0">
+        <table class="table mb-0" style="font-size:13px;">
+          {% macro row(label, value, mono=False) %}
+          <tr>
+            <td style="color:var(--text-muted); width:140px;">{{ label }}</td>
+            <td {% if mono %}style="font-family:var(--font-mono);"{% endif %}>{{ value or '—' }}</td>
+          </tr>
+          {% endmacro %}
+          {{ row('Invoice No', invoice.invoice_no, True) }}
+          {{ row('Symbol', invoice.invoice_symbol) }}
+          {{ row('Issue Date', invoice.issue_date[:10] if invoice.issue_date else '—') }}
+          {{ row('Status', invoice.status) }}
+          {{ row('Type', invoice.invoice_type) }}
+          <tr><td colspan="2" style="background:rgba(0,212,170,0.04); padding:6px 14px; color:var(--brand); font-size:11px; font-weight:600; letter-spacing:0.05em;">SELLER</td></tr>
+          {{ row('Name', invoice.seller_name) }}
+          {{ row('Tax Code', invoice.seller_tax_code, True) }}
+          <tr><td colspan="2" style="background:rgba(121,192,255,0.04); padding:6px 14px; color:#79c0ff; font-size:11px; font-weight:600; letter-spacing:0.05em;">BUYER</td></tr>
+          {{ row('Name', invoice.buyer_name) }}
+          {{ row('Tax Code', invoice.buyer_tax_code, True) }}
+          <tr><td colspan="2" style="background:rgba(63,185,80,0.04); padding:6px 14px; color:#3fb950; font-size:11px; font-weight:600; letter-spacing:0.05em;">AMOUNTS (VNĐ)</td></tr>
+          <tr>
+            <td style="color:var(--text-muted);">Amount</td>
+            <td style="font-family:var(--font-mono);">{{ "{:,.0f}".format(invoice.amount) }}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted);">VAT</td>
+            <td style="font-family:var(--font-mono); color:#79c0ff;">{{ "{:,.0f}".format(invoice.vat_amount) }}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted); font-weight:600;">Total</td>
+            <td style="font-family:var(--font-mono); font-weight:700; color:var(--brand);">{{ "{:,.0f}".format(invoice.total_amount) }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- File links -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-folder2-open"></i> Downloaded Files</div>
+      <div class="card-body">
+        {% if invoice.has_xml %}
+        <a href="{{ url_for('invoices.api_download', invoice_id=invoice.id, file_type='xml') }}"
+           class="btn btn-sm btn-outline-secondary w-100 mb-2">
+          <i class="bi bi-filetype-xml" style="color:var(--brand);"></i> Download XML
+        </a>
+        {% else %}
+        <div class="text-muted mb-2" style="font-size:12px;"><i class="bi bi-x-circle"></i> XML not available</div>
+        {% endif %}
+        {% if invoice.has_pdf %}
+        <a href="{{ url_for('invoices.api_download', invoice_id=invoice.id, file_type='pdf') }}"
+           class="btn btn-sm btn-outline-secondary w-100">
+          <i class="bi bi-filetype-pdf" style="color:#f85149;"></i> Download PDF
+        </a>
+        {% else %}
+        <div class="text-muted" style="font-size:12px;"><i class="bi bi-x-circle"></i> PDF not available</div>
+        {% endif %}
+        {% if invoice.xml_path %}
+        <div class="mt-3 p-2" style="background:#0d1117; border-radius:6px; font-size:10px; font-family:var(--font-mono); color:#484f58; word-break:break-all;">
+          {{ invoice.xml_path }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── XML Preview ────────────────────────── -->
+  <div class="col-md-7">
+    {% if invoice.xml_content %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-code-slash"></i> XML Preview (first 5000 chars)</div>
+      <div class="card-body p-0">
+        <pre style="background:#0d1117; color:#79c0ff; font-size:11px; font-family:var(--font-mono); padding:14px; margin:0; border-radius:0 0 10px 10px; max-height:400px; overflow:auto; white-space:pre-wrap; word-break:break-all;">{{ invoice.xml_content | e }}</pre>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if invoice.line_items %}
+    <div class="card">
+      <div class="card-header"><i class="bi bi-list-ul"></i> Line Items</div>
+      <div class="card-body p-0">
+        <div style="overflow-x:auto;">
+          <table class="table mb-0" style="font-size:12px;">
+            <thead>
+              <tr>
+                {% for key in invoice.line_items[0].keys() %}
+                <th>{{ key }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in invoice.line_items %}
+              <tr>
+                {% for v in item.values() %}
+                <td>{{ v or '' }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+# env file
+.env
+
+# venv
+venv/
+
+# logs
+logs/
+invoices/
+downloads/
+instance/
+exports/

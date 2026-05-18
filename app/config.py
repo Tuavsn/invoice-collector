@@ -53,6 +53,7 @@ class Config:
     )
     PLAYWRIGHT_TIMEOUT: int = int(os.getenv("PLAYWRIGHT_TIMEOUT", 30000))
     PLAYWRIGHT_SLOW_MO: int = int(os.getenv("PLAYWRIGHT_SLOW_MO", 100))
+    SESSION_PATH: Path = Path("logs/session_state.json")
 
     # ----------------------------------------------------------------- Crawler
     CRAWLER_MAX_RETRIES: int = int(os.getenv("CRAWLER_MAX_RETRIES", 5))

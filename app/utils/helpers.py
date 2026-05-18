@@ -6,13 +6,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
-def clean_ocr_text(raw: str) -> str:
-    """Strip whitespace and non-alphanumeric characters from OCR output."""
-    cleaned = re.sub(r"[^A-Za-z0-9]", "", raw)
-    return cleaned.upper()
-
-
 def safe_filename(name: str) -> str:
     """Replace characters illegal in filenames."""
     return re.sub(r'[<>:"/\\|?*]', "_", name)

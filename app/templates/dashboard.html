@@ -7,7 +7,7 @@
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
     <div class="stat-card d-flex align-items-start gap-3">
-      <div class="stat-icon" style="background:rgba(0,212,170,0.12); color:var(--brand);">
+      <div class="stat-icon" style="background:#eff6ff; color:#1a56db;">
         <i class="bi bi-receipt"></i>
       </div>
       <div>
@@ -18,12 +18,12 @@
   </div>
   <div class="col-6 col-md-3">
     <div class="stat-card d-flex align-items-start gap-3">
-      <div class="stat-icon" style="background:rgba(121,192,255,0.12); color:#79c0ff;">
+      <div class="stat-icon" style="background:#f0fdf4; color:#057a55;">
         <i class="bi bi-cash-stack"></i>
       </div>
       <div>
         <div class="stat-label">Total VAT</div>
-        <div class="stat-value" style="font-size:18px;">
+        <div class="stat-value" style="font-size:17px;">
           {{ "{:,.0f}".format(stats.total_vat | default(0)) }} ₫
         </div>
       </div>
@@ -31,12 +31,12 @@
   </div>
   <div class="col-6 col-md-3">
     <div class="stat-card d-flex align-items-start gap-3">
-      <div class="stat-icon" style="background:rgba(63,185,80,0.12); color:#3fb950;">
+      <div class="stat-icon" style="background:#fdf2f8; color:#9d174d;">
         <i class="bi bi-currency-dollar"></i>
       </div>
       <div>
         <div class="stat-label">Total Amount</div>
-        <div class="stat-value" style="font-size:18px;">
+        <div class="stat-value" style="font-size:17px;">
           {{ "{:,.0f}".format(stats.total_amount | default(0)) }} ₫
         </div>
       </div>
@@ -44,7 +44,7 @@
   </div>
   <div class="col-6 col-md-3">
     <div class="stat-card d-flex align-items-start gap-3">
-      <div class="stat-icon" style="background:rgba(210,153,34,0.12); color:#d29922;">
+      <div class="stat-icon" style="background:#fffbeb; color:#b45309;">
         <i class="bi bi-calendar-check"></i>
       </div>
       <div>
@@ -76,15 +76,15 @@
         <canvas id="dlChart" height="170"></canvas>
         <div class="row mt-3 text-center" style="font-size:12px;">
           <div class="col">
-            <div class="text-brand fw-bold" style="font-family:var(--font-mono);">{{ dl_stats.xml }}</div>
+            <div class="fw-bold" style="color:#1a56db; font-family:var(--font-mono);">{{ dl_stats.xml }}</div>
             <div class="text-muted">XML</div>
           </div>
           <div class="col">
-            <div style="color:#f85149;" class="fw-bold" style="font-family:var(--font-mono);">{{ dl_stats.pdf }}</div>
+            <div class="fw-bold" style="color:#c81e1e; font-family:var(--font-mono);">{{ dl_stats.pdf }}</div>
             <div class="text-muted">PDF</div>
           </div>
           <div class="col">
-            <div style="color:#d29922;" class="fw-bold" style="font-family:var(--font-mono);">{{ dl_stats.json }}</div>
+            <div class="fw-bold" style="color:#b45309; font-family:var(--font-mono);">{{ dl_stats.json }}</div>
             <div class="text-muted">JSON</div>
           </div>
         </div>
@@ -115,20 +115,23 @@
           <td><code>#{{ job.id }}</code></td>
           <td>{{ job.start_date }} → {{ job.end_date }}</td>
           <td>
-            <span class="badge badge-status-{{ job.status }}">{{ job.status | upper }}</span>
+            <span class="badge badge-status badge-status-{{ job.status }}">{{ job.status | upper }}</span>
           </td>
           <td>{{ job.downloaded_invoices }} / {{ job.total_invoices }}</td>
-          <td style="font-family:var(--font-mono); font-size:11px;">
+          <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);">
             {{ job.start_time.strftime('%d/%m %H:%M') if job.start_time else '—' }}
           </td>
-          <td style="font-family:var(--font-mono); font-size:11px;">
+          <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);">
             {% if job.start_time and job.end_time %}
               {{ ((job.end_time - job.start_time).total_seconds() | int) }}s
             {% else %}—{% endif %}
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="text-center text-muted py-4">No crawl jobs yet.</td></tr>
+        <tr><td colspan="6" class="text-center py-5" style="color:var(--text-muted);">
+          <i class="bi bi-inbox" style="font-size:28px; display:block; margin-bottom:8px; opacity:.4;"></i>
+          No crawl jobs yet.
+        </td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -140,10 +143,9 @@
 <script>
 const monthly = {{ monthly | tojson }};
 
-// Monthly bar chart
 const labels = monthly.map(m => m.month);
 const counts = monthly.map(m => m.count);
-const vats = monthly.map(m => m.vat / 1e6);
+const vats   = monthly.map(m => m.vat / 1e6);
 
 new Chart(document.getElementById('monthlyChart'), {
   type: 'bar',
@@ -153,41 +155,45 @@ new Chart(document.getElementById('monthlyChart'), {
       {
         label: 'Invoices',
         data: counts,
-        backgroundColor: 'rgba(0, 212, 170, 0.7)',
-        borderRadius: 4,
+        backgroundColor: 'rgba(26,86,219,0.75)',
+        borderRadius: 5,
         yAxisID: 'y',
       },
       {
         label: 'VAT (triệu ₫)',
         data: vats,
         type: 'line',
-        borderColor: '#79c0ff',
-        backgroundColor: 'rgba(121,192,255,0.1)',
+        borderColor: '#057a55',
+        backgroundColor: 'rgba(5,122,85,0.06)',
         fill: true,
         tension: 0.3,
         yAxisID: 'y1',
+        pointBackgroundColor: '#057a55',
+        pointRadius: 3,
       }
     ]
   },
   options: {
     responsive: true,
-    plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } },
+    plugins: {
+      legend: { labels: { color: '#4b5563', font: { size: 11 } } },
+      tooltip: { backgroundColor: '#fff', titleColor: '#111928', bodyColor: '#4b5563', borderColor: '#e5e7eb', borderWidth: 1 }
+    },
     scales: {
-      x: { ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
-      y: { ticks: { color: '#8b949e' }, grid: { color: '#30363d' }, title: { display: true, text: 'Invoices', color: '#8b949e' } },
-      y1: { position: 'right', ticks: { color: '#79c0ff' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'VAT (M₫)', color: '#79c0ff' } },
+      x: { ticks: { color: '#6b7280' }, grid: { color: '#f3f4f6' } },
+      y: { ticks: { color: '#6b7280' }, grid: { color: '#f3f4f6' }, title: { display: true, text: 'Invoices', color: '#6b7280' } },
+      y1: { position: 'right', ticks: { color: '#057a55' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'VAT (M₫)', color: '#057a55' } },
     }
   }
 });
 
-// Doughnut: file types
 new Chart(document.getElementById('dlChart'), {
   type: 'doughnut',
   data: {
     labels: ['XML', 'PDF', 'JSON', 'Other'],
     datasets: [{
       data: [{{ dl_stats.xml }}, {{ dl_stats.pdf }}, {{ dl_stats.json }}, {{ dl_stats.other }}],
-      backgroundColor: ['#00d4aa', '#f85149', '#d29922', '#484f58'],
+      backgroundColor: ['#1a56db', '#c81e1e', '#b45309', '#d1d5db'],
       borderWidth: 0,
     }]
   },

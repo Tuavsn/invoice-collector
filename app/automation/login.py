@@ -12,11 +12,81 @@ from loguru import logger
 from playwright.async_api import Page
 
 from app.automation.captcha import get_captcha_image_b64, refresh_captcha
+from app.automation.browser import BrowserManager
 from app.config import Config
 
 MAX_ATTEMPTS    = Config.CRAWLER_MAX_RETRIES
 LOGIN_URL       = Config.GDT_LOGIN_URL
 CAPTCHA_TIMEOUT = 120  # giây chờ user nhập tối đa
+
+# URL chỉ xuất hiện khi đã đăng nhập
+_LOGGED_IN_KEYWORDS = ("tra-cuu", "quan-ly", "dashboard")
+# Selector chỉ xuất hiện khi đã đăng nhập
+_LOGGED_IN_SELECTORS = ".ant-dropdown-trigger, .user-info, #logout"
+
+
+async def ensure_logged_in(
+    page: Page,
+    browser_manager: BrowserManager,
+    username: str,
+    password: str,
+    emit_fn: Optional[Callable[[str], None]] = None,
+    emit_captcha_fn: Optional[Callable[[str], None]] = None,
+    captcha_event: Optional[threading.Event] = None,
+    get_captcha_answer: Optional[Callable[[], str]] = None,
+) -> bool:
+    """
+    Entry point chính. Kiểm tra session còn sống không, nếu không thì login mới.
+    Trả về True nếu đang ở trạng thái đã đăng nhập.
+    """
+    def emit(msg: str) -> None:
+        logger.info(msg)
+        if emit_fn:
+            emit_fn(msg)
+
+    # Có session đã lưu → thử dùng lại
+    if browser_manager.has_saved_session:
+        emit("🔄 Phát hiện session cũ — kiểm tra còn hợp lệ không…")
+        if await _check_session_valid(page, emit):
+            return True
+
+        # Session hết hạn → xóa và login lại
+        emit("⚠ Session hết hạn — xóa và đăng nhập lại…")
+        browser_manager.clear_session()
+
+    # Login mới và lưu session nếu thành công
+    success = await attempt_login(
+        page=page,
+        username=username,
+        password=password,
+        emit_fn=emit_fn,
+        emit_captcha_fn=emit_captcha_fn,
+        captcha_event=captcha_event,
+        get_captcha_answer=get_captcha_answer,
+    )
+
+    if success:
+        await browser_manager.save_session()
+
+    return success
+
+
+async def _check_session_valid(
+    page: Page,
+    emit: Callable[[str], None],
+) -> bool:
+    """
+    Điều hướng đến portal, trả về True nếu vẫn đang đăng nhập.
+    Không raise — mọi lỗi đều coi là session không hợp lệ.
+    """
+    try:
+        await page.goto(LOGIN_URL, wait_until="networkidle", timeout=30_000)
+        if await _is_logged_in(page):
+            emit("✓ Session còn hợp lệ — bỏ qua bước đăng nhập.")
+            return True
+    except Exception as exc:
+        logger.warning("Kiểm tra session thất bại: {}", exc)
+    return False
 
 
 async def attempt_login(
@@ -29,9 +99,9 @@ async def attempt_login(
     get_captcha_answer: Optional[Callable[[], str]] = None,
 ) -> bool:
     """
-    Điều hướng đến GDT portal và thực hiện login.
-    Gửi ảnh captcha lên UI, chờ user nhập, sau đó submit form.
+    Thực hiện login thủ công qua form + captcha.
     Trả về True nếu login thành công.
+    Không tự lưu session — việc đó do ensure_logged_in() đảm nhận.
     """
     def emit(msg: str) -> None:
         logger.info(msg)
@@ -115,6 +185,8 @@ async def attempt_login(
     return False
 
 
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
 async def _wait_for_threading_event(
     event: threading.Event, timeout: float
 ) -> bool:
@@ -130,16 +202,16 @@ async def _wait_for_threading_event(
 
 
 async def _is_logged_in(page: Page) -> bool:
-    if any(k in page.url for k in ("tra-cuu", "quan-ly", "dashboard")):
+    if any(k in page.url for k in _LOGGED_IN_KEYWORDS):
         return True
     try:
-        el = await page.query_selector(".ant-dropdown-trigger, .user-info, #logout")
+        el = await page.query_selector(_LOGGED_IN_SELECTORS)
         return el is not None
     except Exception:
         return False
 
 
-async def _get_error_message(modal: Locator) -> str:
+async def _get_error_message(modal) -> str:
     try:
         el = modal.locator(".ant-alert-message, .error-message, .login-error").first
         await el.wait_for(state="visible", timeout=2_000)

@@ -2,13 +2,12 @@
 
 **Production-grade automated invoice downloader for the Vietnam General Department of Taxation (GDT) portal.**
 
-Built with Flask · Playwright Async · OpenCV · EasyOCR · SQLite · SocketIO
+Built with Flask · Playwright Async · SQLite · SocketIO
 
 ---
 
 ## Features
 
-- ✅ Automated login with CAPTCHA solving (OpenCV + EasyOCR)
 - ✅ Invoice search by date range
 - ✅ Downloads XML, PDF, and attachments per invoice
 - ✅ Structured file storage (`invoices/YYYY/MM/DD/invoice_no/`)
@@ -51,16 +50,6 @@ playwright install chromium
 playwright install
 ```
 
-### 5. Pre-download EasyOCR model
-
-EasyOCR tự động tải model (~100MB + PyTorch) khi chạy lần đầu. Để tránh timeout lúc runtime, hãy pre-download trước:
-
-```bash
-python -c "import easyocr; easyocr.Reader(['en'], gpu=False)"
-```
-
-> **Lưu ý:** EasyOCR sẽ kéo thêm `torch` + `torchvision` (~800MB) tự động khi `pip install`. Đây là bình thường và không cần cài thủ công.
-
 ### 6. Run the application
 
 ```bash
@@ -92,8 +81,6 @@ docker compose down
 ```
 
 All data is persisted via Docker volumes (`invoices.db`, `invoices/`, `exports/`, `logs/`).
-
-> **Lưu ý Docker:** EasyOCR model được download và baked vào image lúc build (xem `Dockerfile`). Không cần download lại khi container khởi động.
 
 ---
 
@@ -133,7 +120,7 @@ invoice-crawler/
 │   ├── extensions.py        # Flask extension instances
 │   ├── automation/
 │   │   ├── browser.py       # Playwright browser lifecycle
-│   │   ├── captcha.py       # OpenCV + EasyOCR CAPTCHA solver
+│   │   ├── captcha.py       # 
 │   │   ├── login.py         # GDT portal login automation
 │   │   ├── invoice_search.py# Search page automation
 │   │   ├── invoice_export.py# Invoice list export
@@ -182,30 +169,6 @@ invoice-crawler/
 | `CRAWLER_DELAY_MS` | `500` | Delay between invoice rows |
 
 ---
-
-## OCR Troubleshooting
-
-### CAPTCHA not solved correctly
-
-1. Set `PLAYWRIGHT_HEADLESS=false` to watch the browser
-2. Check `logs/screenshots/captcha_raw_1.png` và `captcha_processed_1.png`
-3. EasyOCR tự động retry tối đa 5 lần — kiểm tra log để xem kết quả từng lần
-4. Nếu vẫn sai, thử tăng `CRAWLER_MAX_RETRIES` trong `.env`
-
-### EasyOCR model không tải được
-
-Kiểm tra kết nối internet và thử pre-download lại thủ công:
-
-```bash
-python -c "import easyocr; easyocr.Reader(['en'], gpu=False)"
-```
-
-Model được lưu tại `~/.EasyOCR/model/`. Nếu bị lỗi, xóa thư mục và tải lại:
-
-```bash
-rm -rf ~/.EasyOCR
-python -c "import easyocr; easyocr.Reader(['en'], gpu=False)"
-```
 
 ---
 

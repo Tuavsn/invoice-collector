@@ -1,10 +1,13 @@
 """
 Core crawler engine — orchestrates the full crawl lifecycle:
 login → search → paginate → download per invoice → persist to DB.
+
+One instance per crawl job; không tái sử dụng giữa các job.
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from datetime import datetime
 from typing import Any, Callable, Dict, Optional
@@ -13,7 +16,7 @@ from loguru import logger
 from playwright.async_api import Page
 
 from app.automation.browser import BrowserManager
-from app.automation.invoice_detail import process_invoice_row
+from app.automation.invoice_detail import SKIPPED, process_invoice_row
 from app.automation.invoice_export import export_invoice_list
 from app.automation.invoice_search import (
     get_total_rows,
@@ -22,17 +25,13 @@ from app.automation.invoice_search import (
     set_date_filter,
     set_page_size,
 )
-from app.automation.login import attempt_login
+from app.automation.login import ensure_logged_in
 from app.config import Config
 from app.db.repository import CrawlJobRepository, InvoiceRepository
-from app.services.xml_service import XmlService
 
 
 class CrawlerEngine:
-    """
-    Stateful crawler engine.
-    One instance per crawl job; không tái sử dụng giữa các job.
-    """
+    """Stateful crawler engine. One instance per crawl job."""
 
     def __init__(
         self,
@@ -47,20 +46,20 @@ class CrawlerEngine:
         get_captcha_answer: Optional[Callable[[], str]] = None,
         app=None,
     ) -> None:
-        self.job_id = job_id
-        self.username = username
-        self.password = password
-        self.start_date = start_date
-        self.end_date = end_date
-        self.emit_fn = emit_fn
-        self.emit_captcha_fn = emit_captcha_fn
-        self.captcha_event = captcha_event
+        self.job_id             = job_id
+        self.username           = username
+        self.password           = password
+        self.start_date         = start_date
+        self.end_date           = end_date
+        self.emit_fn            = emit_fn
+        self.emit_captcha_fn    = emit_captcha_fn
+        self.captcha_event      = captcha_event
         self.get_captcha_answer = get_captcha_answer
-        self.app = app
-        self._stop_requested = False
-        self._browser = BrowserManager()
+        self.app                = app
+        self._stop_requested    = False
+        self._browser           = BrowserManager()
 
-    # ------------------------------------------------------------------ public
+    # ─────────────────────────────────────────────────────────────── public
 
     async def run(self) -> None:
         """Entry point — chạy toàn bộ vòng đời crawl."""
@@ -69,12 +68,12 @@ class CrawlerEngine:
 
         page: Optional[Page] = None
         try:
-            ctx = await self._browser.start()
+            ctx  = await self._browser.start()
             page = await ctx.new_page()
 
-            # Login (có captcha manual)
-            logged_in = await attempt_login(
+            logged_in = await ensure_logged_in(
                 page=page,
+                browser_manager=self._browser,
                 username=self.username,
                 password=self.password,
                 emit_fn=self.emit_fn,
@@ -85,7 +84,6 @@ class CrawlerEngine:
             if not logged_in:
                 raise RuntimeError("Login failed after all attempts.")
 
-            # Navigate to search
             ok = await navigate_to_search(page, emit_fn=self.emit_fn)
             if not ok:
                 raise RuntimeError("Failed to reach search page.")
@@ -121,16 +119,17 @@ class CrawlerEngine:
         self._stop_requested = True
         self._emit("Stop requested — will halt after current invoice…")
 
-    # ----------------------------------------------------------------- private
+    # ─────────────────────────────────────────────────────────────── private
 
     async def _iterate_all_pages(self, page: Page) -> None:
-        page_num = 1
+        page_num        = 1
         total_processed = 0
-        total_failed = 0
+        total_failed    = 0
+        total_skipped   = 0
 
         while not self._stop_requested:
             self._emit(f"📄 Processing page {page_num}…")
-            rows = page.locator("tbody.ant-table-tbody tr.ant-table-row")
+            rows  = page.locator("tbody.ant-table-tbody tr.ant-table-row")
             count = await rows.count()
 
             if count == 0:
@@ -147,14 +146,16 @@ class CrawlerEngine:
                 with self._app_context():
                     result = await process_invoice_row(page, row, i, emit_fn=self.emit_fn)
 
-                if result:
+                if result is SKIPPED:
+                    total_skipped += 1
+                elif result:
                     await self._persist_invoice(result)
                     total_processed += 1
                 else:
                     total_failed += 1
 
                 self._update_job(
-                    total_invoices=total_processed + total_failed,
+                    total_invoices=total_processed + total_failed + total_skipped,
                     downloaded_invoices=total_processed,
                     failed_invoices=total_failed,
                 )
@@ -167,7 +168,10 @@ class CrawlerEngine:
             page_num += 1
             await asyncio.sleep(1)
 
-        self._emit(f"Iteration complete — processed={total_processed}, failed={total_failed}")
+        self._emit(
+            f"Iteration complete — processed={total_processed}, "
+            f"skipped={total_skipped}, failed={total_failed}"
+        )
 
     async def _go_to_next_page(self, page: Page) -> bool:
         try:
@@ -182,46 +186,88 @@ class CrawlerEngine:
             await asyncio.sleep(1)
             return True
         except Exception as exc:
-            logger.debug("Next page: {}", exc)
+            logger.debug("Next page navigation error: {}", exc)
             return False
 
     async def _persist_invoice(self, result: Dict[str, Any]) -> None:
+        """
+        Lưu invoice vào DB từ result dict của process_invoice_row().
+        Tất cả field đã chuẩn hóa kiểu dữ liệu tại invoice_detail.py + XmlService.
+        Không parse lại bất kỳ dữ liệu nào ở đây.
+        """
         with self._app_context():
             try:
-                xml_path = result.get("xml_path")
-                if xml_path:
-                    from pathlib import Path
-                    xml_file = Path(xml_path)
-                    if xml_file.exists():
-                        xml_data = XmlService.parse_invoice_xml(xml_file)
-                        if xml_data:
-                            result.update(xml_data)
-
+                # ── Chuẩn hóa issue_date → datetime (nếu chưa phải)
                 issue_date = result.get("issue_date")
-                if isinstance(issue_date, str):
+                if isinstance(issue_date, str) and issue_date:
                     from app.utils.dates import parse_date
                     issue_date = parse_date(issue_date)
 
-                db_data = {
-                    "invoice_no":       result.get("invoice_no", ""),
-                    "invoice_symbol":   result.get("invoice_symbol"),
+                issue_datetime = (
+                    datetime.combine(issue_date, datetime.min.time())
+                    if issue_date else None
+                )
+
+                # ── Serialize line_items → JSON string
+                line_items     = result.get("line_items", [])
+                line_items_json = (
+                    json.dumps(line_items, ensure_ascii=False)
+                    if line_items else None
+                )
+
+                db_data: Dict[str, Any] = {
+                    # ── Thông tin hóa đơn
+                    "invoice_no":     result.get("invoice_no", ""),
+                    "invoice_symbol": result.get("invoice_symbol"),
+                    "invoice_form":   result.get("invoice_form"),
+                    "invoice_type":   result.get("invoice_type"),
+                    "issue_date":     issue_datetime,
+                    "status":         result.get("status", "downloaded"),
+                    "currency":       result.get("currency"),
+                    "payment_method": result.get("payment_method"),
+                    # ── Người bán
                     "seller_name":      result.get("seller_name"),
                     "seller_tax_code":  result.get("seller_tax_code"),
-                    "buyer_name":       result.get("buyer_name"),
-                    "buyer_tax_code":   result.get("buyer_tax_code"),
-                    "issue_date":       datetime.combine(issue_date, datetime.min.time()) if issue_date else None,
-                    "amount":           result.get("amount", 0.0),
-                    "vat_amount":       result.get("vat_amount", 0.0),
-                    "total_amount":     result.get("total_amount", 0.0),
-                    "xml_path":         result.get("xml_path"),
-                    "pdf_path":         result.get("pdf_path"),
-                    "metadata_path":    result.get("metadata_path"),
-                    "has_xml":          result.get("has_xml", False),
-                    "has_pdf":          result.get("has_pdf", False),
-                    "status":           "downloaded",
+                    "seller_address":   result.get("seller_address"),
+                    "seller_phone":     result.get("seller_phone"),
+                    "seller_email":     result.get("seller_email"),
+                    "seller_bank":      result.get("seller_bank"),
+                    "seller_bank_name": result.get("seller_bank_name"),
+                    # ── Người mua
+                    "buyer_name":     result.get("buyer_name"),
+                    "buyer_tax_code": result.get("buyer_tax_code"),
+                    "buyer_address":  result.get("buyer_address"),
+                    # ── Số tiền (đã là float từ XmlService)
+                    "amount":         result.get("amount",       0.0),
+                    "vat_rate":       result.get("vat_rate"),
+                    "vat_amount":     result.get("vat_amount",   0.0),
+                    "total_amount":   result.get("total_amount", 0.0),
+                    "total_in_words": result.get("total_in_words"),
+                    # ── Mã CQT / QR
+                    "tax_authority_code": result.get("tax_authority_code"),
+                    "qr_data":            result.get("qr_data"),
+                    # ── Hàng hóa / dịch vụ
+                    "line_items_json": line_items_json,
+                    # ── Đường dẫn file
+                    "zip_path":       result.get("zip_path"),
+                    "xml_data_path":  result.get("xml_data_path"),
+                    "view_html_path": result.get("view_html_path"),
+                    "pdf_path":       result.get("pdf_path"),
+                    "metadata_path":  result.get("metadata_path"),
+                    "invoice_dir":    result.get("invoice_dir"),
+                    # ── Flags
+                    "has_zip":  result.get("has_zip",  False),
+                    "has_xml":  result.get("has_xml",  False),
+                    "has_html": result.get("has_html", False),
+                    "has_pdf":  result.get("has_pdf",  False),
                 }
+
                 InvoiceRepository.upsert(db_data)
-                logger.debug("Persisted invoice #{}", db_data["invoice_no"])
+                logger.debug(
+                    "Persisted invoice #{} ({} line items)",
+                    db_data["invoice_no"],
+                    len(line_items),
+                )
 
             except Exception as exc:
                 logger.error("Failed to persist invoice: {}", exc)

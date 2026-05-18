@@ -10,3 +10,6 @@ invoices/
 downloads/
 instance/
 exports/
+
+# Python cache
+__pycache__/

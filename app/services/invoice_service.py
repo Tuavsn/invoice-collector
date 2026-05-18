@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 
 from app.db.repository import InvoiceRepository
-from app.db.models import Invoice
 from app.services.xml_service import XmlService
 
 
@@ -22,9 +21,11 @@ class InvoiceService:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         invoice_type: Optional[str] = None,
+        ghi_chu: Optional[str] = None,
+        thang_ke_khai: Optional[str] = None,
     ):
         start_dt = _parse_dt(start_date) if start_date else None
-        end_dt = _parse_dt(end_date) if end_date else None
+        end_dt   = _parse_dt(end_date)   if end_date   else None
 
         return InvoiceRepository.get_all(
             page=page,
@@ -33,6 +34,8 @@ class InvoiceService:
             start_date=start_dt,
             end_date=end_dt,
             invoice_type=invoice_type,
+            ghi_chu=ghi_chu,
+            thang_ke_khai=thang_ke_khai,
         )
 
     @staticmethod
@@ -43,12 +46,26 @@ class InvoiceService:
 
         detail = invoice.to_dict()
 
-        # Attach XML line items if XML exists
-        if invoice.xml_path:
-            xml_file = Path(invoice.xml_path)
+        xml_data_path = detail.get("xml_data_path")
+        if xml_data_path:
+            xml_file = Path(xml_data_path)
             if xml_file.exists():
-                detail["line_items"] = XmlService.extract_line_items(xml_file)
-                detail["xml_content"] = xml_file.read_text(encoding="utf-8", errors="replace")[:5000]
+                raw_bytes = xml_file.read_bytes()
+                if not detail.get("line_items"):
+                    detail["line_items"] = XmlService.parse_line_items(raw_bytes)
+                detail["xml_data_content"] = raw_bytes.decode("utf-8", errors="replace")[:5000]
+            else:
+                logger.warning("xml_data_path trỏ tới file không tồn tại: {}", xml_data_path)
+
+        for path_field, flag_field in [
+            ("zip_path",       "has_zip"),
+            ("xml_data_path",  "has_xml"),
+            ("view_html_path", "has_html"),
+            ("pdf_path",       "has_pdf"),
+        ]:
+            p = detail.get(path_field)
+            if not detail.get(flag_field):
+                detail[flag_field] = bool(p and Path(p).exists())
 
         return detail
 

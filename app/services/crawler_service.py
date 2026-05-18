@@ -13,13 +13,13 @@ from loguru import logger
 from app.automation.crawler_engine import CrawlerEngine
 from app.db.repository import CrawlJobRepository
 
-# ── Background asyncio loop (runs for the lifetime of the process)
-_loop: Optional[asyncio.AbstractEventLoop] = None
-_loop_thread: Optional[threading.Thread] = None
+# ── Background asyncio loop (runs for the lifetime of the process) ────────────
+_loop:        Optional[asyncio.AbstractEventLoop] = None
+_loop_thread: Optional[threading.Thread]          = None
 
-# ── Active engine reference (one job at a time)
-_active_engine: Optional[CrawlerEngine] = None
-_active_future: Optional[asyncio.Future] = None
+# ── Active engine reference (one job at a time) ───────────────────────────────
+_active_engine: Optional[CrawlerEngine]           = None
+_active_future: Optional[asyncio.Future]          = None
 
 
 def _ensure_loop() -> asyncio.AbstractEventLoop:
@@ -41,9 +41,9 @@ def start_crawl(
     start_date: str,
     end_date: str,
     emit_fn: Optional[Callable[[str], None]] = None,
-    emit_captcha_fn: Optional[Callable[[str], None]] = None,       # <-- thêm
-    captcha_event: Optional[threading.Event] = None,               # <-- thêm
-    get_captcha_answer: Optional[Callable[[], str]] = None,        # <-- thêm
+    emit_captcha_fn: Optional[Callable[[str], None]] = None,
+    captcha_event: Optional[threading.Event] = None,
+    get_captcha_answer: Optional[Callable[[], str]] = None,
     app=None,
 ) -> bool:
     """
@@ -67,9 +67,9 @@ def start_crawl(
         start_date=start_date,
         end_date=end_date,
         emit_fn=emit_fn,
-        emit_captcha_fn=emit_captcha_fn,       # <-- thêm
-        captcha_event=captcha_event,           # <-- thêm
-        get_captcha_answer=get_captcha_answer, # <-- thêm
+        emit_captcha_fn=emit_captcha_fn,
+        captcha_event=captcha_event,
+        get_captcha_answer=get_captcha_answer,
         app=app,
     )
     _active_engine = engine
@@ -77,7 +77,7 @@ def start_crawl(
     future = asyncio.run_coroutine_threadsafe(engine.run(), loop)
     _active_future = future
 
-    def _on_done(f):
+    def _on_done(f: asyncio.Future) -> None:
         global _active_engine, _active_future
         _active_engine = None
         _active_future = None
@@ -111,10 +111,10 @@ def stop_crawl() -> bool:
 def get_crawl_status() -> dict:
     """Return current crawl status summary."""
     running_job = CrawlJobRepository.get_running()
-    recent = CrawlJobRepository.get_recent(5)
+    recent      = CrawlJobRepository.get_recent(5)
 
     return {
-        "is_running": _active_engine is not None,
+        "is_running":  _active_engine is not None,
         "running_job": running_job.to_dict() if running_job else None,
         "recent_jobs": [j.to_dict() for j in recent],
     }

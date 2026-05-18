@@ -22,14 +22,27 @@ from app.config import Config
 class BrowserManager:
     """Manages a single Chromium browser instance for the crawler session."""
 
-    def __init__(self) -> None:
+    def __init__(self, session_file: Optional[str] = None) -> None:
         self._playwright: Optional[Playwright] = None
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
+        # Mặc định lưu tại logs/session_state.json (có thể override)
+        self._session_path: Path = (
+            Path(session_file) if session_file else Config.SESSION_PATH
+        )
+
+    @property
+    def has_saved_session(self) -> bool:
+        """Kiểm tra session đã được lưu chưa."""
+        return self._session_path.exists() and self._session_path.stat().st_size > 0
 
     async def start(self) -> BrowserContext:
-        """Launch Chromium and create a persistent context."""
-        logger.info("Starting Playwright browser (headless={})", Config.PLAYWRIGHT_HEADLESS)
+        """Launch Chromium và load session nếu có."""
+        logger.info(
+            "Starting Playwright browser (headless={}, session={})",
+            Config.PLAYWRIGHT_HEADLESS,
+            self._session_path if self.has_saved_session else "none",
+        )
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
             headless=Config.PLAYWRIGHT_HEADLESS,
@@ -42,7 +55,8 @@ class BrowserManager:
                 "--disable-extensions",
             ],
         )
-        self._context = await self._browser.new_context(
+
+        context_kwargs = dict(
             viewport={"width": 1400, "height": 900},
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -52,9 +66,33 @@ class BrowserManager:
             accept_downloads=True,
             locale="vi-VN",
         )
+
+        # Load session cũ nếu tồn tại
+        if self.has_saved_session:
+            context_kwargs["storage_state"] = str(self._session_path)
+            logger.info("Loaded existing session from: {}", self._session_path)
+        else:
+            logger.info("No saved session found, starting fresh.")
+
+        self._context = await self._browser.new_context(**context_kwargs)
         self._context.set_default_timeout(Config.PLAYWRIGHT_TIMEOUT)
         logger.info("Browser context ready.")
         return self._context
+
+    async def save_session(self) -> Path:
+        """Lưu cookies + localStorage ra file. Gọi sau khi đăng nhập thành công."""
+        if not self._context:
+            raise RuntimeError("Browser context chưa được khởi tạo.")
+        self._session_path.parent.mkdir(parents=True, exist_ok=True)
+        await self._context.storage_state(path=str(self._session_path))
+        logger.info("Session saved to: {}", self._session_path)
+        return self._session_path
+
+    def clear_session(self) -> None:
+        """Xóa session đã lưu (dùng khi cần đăng nhập lại)."""
+        if self._session_path.exists():
+            self._session_path.unlink()
+            logger.info("Session cleared: {}", self._session_path)
 
     async def new_page(self) -> Page:
         if not self._context:

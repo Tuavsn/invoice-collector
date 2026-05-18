@@ -1,51 +1,50 @@
 <!DOCTYPE html>
-<html lang="vi" data-bs-theme="dark">
+<html lang="vi">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}GDT Invoice Crawler{% endblock %}</title>
 
-  <!-- ── Vendor CSS ───────────────────────────── -->
+  <!-- Vendor CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
-  <!-- ── App CSS ──────────────────────────────── -->
+  <!-- App CSS -->
   <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet" />
 
   {% block head_extra %}{% endblock %}
 </head>
 <body>
 
-<!-- ── Sidebar ──────────────────────────────────────────────── -->
+<!-- ── Sidebar ────────────────────────────────────────────── -->
 <nav id="sidebar">
   <div class="sidebar-brand">
-    <div class="logo-icon">G</div>
-    <span>GDT Crawler<small>Invoice System</small></span>
+    <div class="logo-mark">G</div>
+    <div class="brand-text">
+      <span class="brand-name">GDT Crawler</span>
+    </div>
   </div>
 
-  <div class="sidebar-nav mt-2">
+  <div class="sidebar-nav mt-1">
     <div class="nav-section-label">Overview</div>
     <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if request.endpoint == 'dashboard.index' }}">
-      <i class="bi bi-grid-1x2"></i> Dashboard
+      <i class="bi bi-grid-1x2-fill"></i> Dashboard
     </a>
 
     <div class="nav-section-label">Automation</div>
     <a href="{{ url_for('crawler.index') }}" class="{{ 'active' if request.blueprint == 'crawler' }}">
-      <i class="bi bi-robot"></i> Crawler
+      <i class="bi bi-cpu-fill"></i> Crawler
     </a>
 
     <div class="nav-section-label">Data</div>
     <a href="{{ url_for('invoices.index') }}" class="{{ 'active' if request.blueprint == 'invoices' }}">
-      <i class="bi bi-receipt"></i> Invoices
-    </a>
-    <a href="{{ url_for('export.index') }}" class="{{ 'active' if request.blueprint == 'export' }}">
-      <i class="bi bi-file-earmark-spreadsheet"></i> Export Excel
+      <i class="bi bi-receipt-cutoff"></i> Invoices
     </a>
 
     <div class="nav-section-label">System</div>
     <a href="{{ url_for('settings.index') }}" class="{{ 'active' if request.blueprint == 'settings' }}">
-      <i class="bi bi-sliders"></i> Settings
+      <i class="bi bi-sliders2"></i> Settings
     </a>
   </div>
 
@@ -54,20 +53,16 @@
       <span class="crawler-status-dot idle" id="status-dot"></span>
       <span id="status-text">Crawler idle</span>
     </div>
-    <div class="mt-2" style="font-size:10px; color:#484f58;">
-      GDT Invoice Crawler v1.0
-    </div>
+    <div class="sidebar-version mt-2">v1.0.0 · GDT</div>
   </div>
 </nav>
 
-<!-- ── Main ─────────────────────────────────────────────────── -->
+<!-- ── Main ──────────────────────────────────────────────── -->
 <div id="main-content">
   <div id="topbar">
     <h1>{% block page_title %}{% endblock %}</h1>
     <div class="ms-auto d-flex align-items-center gap-2">
-      <span class="badge" style="background:rgba(0,212,170,0.15); color:var(--brand); font-family:var(--font-mono); font-size:10px;">
-        {{ config.FLASK_ENV | default('production') | upper }}
-      </span>
+      <span class="topbar-badge">{{ config.FLASK_ENV | default('production') }}</span>
     </div>
   </div>
 
@@ -85,12 +80,12 @@
   </div>
 </div>
 
-<!-- ── Vendor JS ─────────────────────────────────────────────── -->
+<!-- Vendor JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
-<!-- ── App JS ────────────────────────────────────────────────── -->
+<!-- App JS -->
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
 {% block scripts %}{% endblock %}

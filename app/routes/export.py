@@ -16,11 +16,21 @@ def index():
 @bp.post("/api/excel")
 def api_excel():
     data = request.get_json(force=True, silent=True) or {}
-    start_date = data.get("start_date", "").strip() or None
-    end_date = data.get("end_date", "").strip() or None
+
+    start_date    = (data.get("start_date")    or "").strip() or None
+    end_date      = (data.get("end_date")      or "").strip() or None
+    ghi_chu       = (data.get("ghi_chu")       or "").strip() or None
+    thang_ke_khai = (data.get("thang_ke_khai") or "").strip() or None
+    search        = (data.get("search")        or "").strip() or None
 
     try:
-        path = ExcelService.export_vat_summary(start_date=start_date, end_date=end_date)
+        path = ExcelService.export_vat_summary(
+            start_date=start_date,
+            end_date=end_date,
+            ghi_chu=ghi_chu,
+            thang_ke_khai=thang_ke_khai,
+            search=search,
+        )
         return jsonify({"ok": True, "file": path.name, "path": str(path)})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -31,7 +41,6 @@ def download(filename: str):
     from app.config import Config
     from pathlib import Path
 
-    # Security: only serve files from the exports directory
     safe_path = (Config.EXPORT_PATH / filename).resolve()
     if not str(safe_path).startswith(str(Config.EXPORT_PATH.resolve())):
         return "Forbidden", 403

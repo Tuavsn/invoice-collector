@@ -7,11 +7,52 @@
   <div class="col-md-7">
     <div class="card">
       <div class="card-header"><i class="bi bi-sliders"></i> Application Settings</div>
-      <div class="card-body">
-        <div id="save-alert" class="alert mb-3" style="display:none;"></div>
+      <div class="card-body p-4">
+        <div id="save-alert" class="mb-3" style="display:none;"></div>
 
-        <h6 class="mb-3" style="color:#79c0ff; font-size:11px; letter-spacing:0.08em; text-transform:uppercase;">Crawler</h6>
-        <div class="row g-2 mb-4">
+        <!-- GDT Credentials (env-only, read-only display) -->
+        <h6 class="mb-3" style="color:var(--text-secondary); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700;">
+          <i class="bi bi-key me-1"></i> GDT Credentials <span style="color:var(--text-muted); font-weight:400; text-transform:none;">(set via .env file)</span>
+        </h6>
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <label class="form-label">GDT_USERNAME</label>
+            <div class="d-flex align-items-center gap-2 p-2" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); font-size:13px; font-family:var(--font-mono);">
+              {% if cred_status.username_set %}
+                <i class="bi bi-check-circle-fill" style="color:var(--success);"></i>
+                <span style="color:var(--text-secondary);">{{ cred_status.username_hint }}</span>
+              {% else %}
+                <i class="bi bi-x-circle-fill" style="color:var(--danger);"></i>
+                <span style="color:var(--danger);">Not set</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">GDT_PASSWORD</label>
+            <div class="d-flex align-items-center gap-2 p-2" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); font-size:13px; font-family:var(--font-mono);">
+              {% if cred_status.password_set %}
+                <i class="bi bi-check-circle-fill" style="color:var(--success);"></i>
+                <span style="color:var(--text-secondary);">••••••••</span>
+              {% else %}
+                <i class="bi bi-x-circle-fill" style="color:var(--danger);"></i>
+                <span style="color:var(--danger);">Not set</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="mb-4 p-3" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); font-size:12px; color:var(--text-muted); line-height:1.7;">
+          <i class="bi bi-info-circle me-1"></i>
+          Add the following to your <code>.env</code> file, then restart the app:
+          <pre style="margin:8px 0 0; color:var(--text-secondary); font-size:12px; background:transparent; padding:0;">GDT_USERNAME=your_username
+GDT_PASSWORD=your_password</pre>
+        </div>
+
+        <hr style="border-color:var(--border); margin-bottom:20px;">
+
+        <h6 class="mb-3" style="color:var(--brand); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700;">
+          <i class="bi bi-cpu me-1"></i> Crawler
+        </h6>
+        <div class="row g-3 mb-4">
           <div class="col-md-4">
             <label class="form-label">Max Retries</label>
             <input type="number" name="crawler_max_retries" class="form-control setting-input" value="{{ settings.crawler_max_retries }}" min="1" max="20" />
@@ -30,12 +71,16 @@
           </div>
         </div>
 
-        <h6 class="mb-3" style="color:#d29922; font-size:11px; letter-spacing:0.08em; text-transform:uppercase;">Playwright</h6>
-        <div class="row g-2 mb-4">
+        <hr style="border-color:var(--border); margin-bottom:20px;">
+
+        <h6 class="mb-3" style="color:var(--warning); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700;">
+          <i class="bi bi-browser-chrome me-1"></i> Playwright
+        </h6>
+        <div class="row g-3 mb-4">
           <div class="col-md-4">
             <label class="form-label">Headless Mode</label>
             <select name="playwright_headless" class="form-select setting-input">
-              <option value="true" {{ 'selected' if settings.playwright_headless == 'true' }}>Headless (true)</option>
+              <option value="true"  {{ 'selected' if settings.playwright_headless == 'true' }}>Headless (true)</option>
               <option value="false" {{ 'selected' if settings.playwright_headless == 'false' }}>Visible (false)</option>
             </select>
           </div>
@@ -59,13 +104,38 @@
   <div class="col-md-5">
     <div class="card">
       <div class="card-header"><i class="bi bi-info-circle"></i> System Info</div>
-      <div class="card-body" style="font-size:12px; font-family:var(--font-mono);">
-        <div class="mb-2"><span class="text-muted">Python:</span> 3.11+</div>
-        <div class="mb-2"><span class="text-muted">Flask:</span> 3.x</div>
-        <div class="mb-2"><span class="text-muted">Playwright:</span> async chromium</div>
-        <hr style="border-color:var(--border);" />
-        <div class="text-muted mb-2">⚙ Settings are persisted to SQLite and override .env values at runtime.</div>
-        <div class="text-muted">⚠ Restart the crawler for Playwright settings to take effect.</div>
+      <div class="card-body" style="font-size:13px;">
+        <div class="d-flex justify-content-between py-2 border-bottom" style="border-color:var(--border) !important;">
+          <span style="color:var(--text-muted);">Python</span>
+          <span class="fw-600" style="font-family:var(--font-mono);">3.11+</span>
+        </div>
+        <div class="d-flex justify-content-between py-2 border-bottom" style="border-color:var(--border) !important;">
+          <span style="color:var(--text-muted);">Flask</span>
+          <span style="font-family:var(--font-mono);">3.x</span>
+        </div>
+        <div class="d-flex justify-content-between py-2 border-bottom" style="border-color:var(--border) !important;">
+          <span style="color:var(--text-muted);">Playwright</span>
+          <span style="font-family:var(--font-mono);">async chromium</span>
+        </div>
+        <div class="mt-3 p-3" style="background:var(--warning-bg); border:1px solid var(--warning-border); border-radius:var(--radius-md); font-size:12px; color:var(--warning);">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Settings are persisted to SQLite and override .env values at runtime. Restart the crawler for Playwright settings to take effect.
+        </div>
+      </div>
+    </div>
+
+    <!-- Auto Sync Info -->
+    <div class="card mt-3">
+      <div class="card-header"><i class="bi bi-arrow-repeat"></i> Auto Sync Schedule</div>
+      <div class="card-body" style="font-size:13px; color:var(--text-secondary); line-height:1.7;">
+        To run daily auto-sync, add a cron job (Linux/macOS) or Scheduled Task (Windows):
+        <pre style="margin-top:10px; font-size:11px; background:var(--surface-2); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border); color:var(--text-secondary);"># Runs every day at 02:00
+0 2 * * * curl -s -X POST http://localhost:5000/crawler/api/start \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"auto_sync"}'</pre>
+        <div class="mt-2" style="font-size:11px; color:var(--text-muted);">
+          Auto Sync covers the last 2 calendar months up to today, split into 30-day chunks automatically.
+        </div>
       </div>
     </div>
   </div>
@@ -75,15 +145,13 @@
 {% block scripts %}
 <script>
 async function saveSettings() {
-  const inputs = document.querySelectorAll('.setting-input');
-  const data = {};
-  inputs.forEach(inp => {
-    data[inp.name] = inp.value;
-  });
+  const inputs  = document.querySelectorAll('.setting-input');
+  const data    = {};
+  inputs.forEach(inp => { data[inp.name] = inp.value; });
 
   const alertEl = document.getElementById('save-alert');
   try {
-    const res = await fetch('/settings/api/save', {
+    const res    = await fetch('/settings/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -91,18 +159,17 @@ async function saveSettings() {
     const result = await res.json();
     alertEl.style.display = 'block';
     if (result.ok) {
-      alertEl.className = 'alert';
-      alertEl.style.cssText = 'display:block; background:rgba(63,185,80,0.1); border:1px solid #3fb950; color:#3fb950;';
-      alertEl.innerHTML = `<i class="bi bi-check-circle"></i> Settings saved: ${result.saved.join(', ')}`;
+      alertEl.style.cssText = 'display:block; background:var(--success-bg); border:1px solid var(--success-border); color:var(--success); padding:12px 16px; border-radius:10px; font-size:13px;';
+      alertEl.innerHTML = `<i class="bi bi-check-circle me-1"></i> Settings saved: ${result.saved.join(', ')}`;
     } else {
-      alertEl.style.cssText = 'display:block; background:rgba(248,81,73,0.1); border:1px solid #f85149; color:#f85149;';
-      alertEl.innerHTML = `<i class="bi bi-x-circle"></i> Error saving settings.`;
+      alertEl.style.cssText = 'display:block; background:var(--danger-bg); border:1px solid var(--danger-border); color:var(--danger); padding:12px 16px; border-radius:10px; font-size:13px;';
+      alertEl.innerHTML = `<i class="bi bi-x-circle me-1"></i> Error saving settings.`;
     }
   } catch(e) {
-    alertEl.style.cssText = 'display:block;';
+    alertEl.style.display = 'block';
     alertEl.innerHTML = `Error: ${e}`;
   }
-  setTimeout(() => alertEl.style.display = 'none', 3000);
+  setTimeout(() => alertEl.style.display = 'none', 3500);
 }
 </script>
 {% endblock %}

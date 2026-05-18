@@ -1,6 +1,9 @@
 """Settings blueprint — configure application parameters at runtime."""
 from __future__ import annotations
 
+import os
+from datetime import date
+
 from flask import Blueprint, jsonify, render_template, request
 
 from app.db.repository import SettingsRepository
@@ -20,14 +23,30 @@ _DEFAULTS = {
 @bp.get("/")
 def index():
     current = SettingsRepository.get_all()
-    # Merge with defaults for any missing keys
-    merged = {**_DEFAULTS, **current}
-    return render_template("settings.html", settings=merged)
+    merged  = {**_DEFAULTS, **current}
+
+    # Credential status (never expose the actual values to the template)
+    gdt_username = os.environ.get("GDT_USERNAME", "").strip()
+    gdt_password = os.environ.get("GDT_PASSWORD", "").strip()
+    cred_status  = {
+        "username_set": bool(gdt_username),
+        "password_set": bool(gdt_password),
+        "username_hint": (gdt_username[:2] + "***") if gdt_username else "",
+    }
+
+    today = date.today()
+    return render_template(
+        "settings.html",
+        settings=merged,
+        cred_status=cred_status,
+        now_year=today.year,
+        now_month=today.month,
+    )
 
 
 @bp.post("/api/save")
 def api_save():
-    data = request.get_json(force=True, silent=True) or {}
+    data        = request.get_json(force=True, silent=True) or {}
     allowed_keys = set(_DEFAULTS.keys())
     saved = []
     for key, value in data.items():

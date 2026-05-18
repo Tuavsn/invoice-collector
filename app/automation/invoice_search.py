@@ -28,17 +28,6 @@ async def navigate_to_search(page: Page, emit_fn: Optional[Callable] = None) -> 
         emit("Navigating to invoice search page…")
         await page.goto(SEARCH_URL, wait_until="networkidle", timeout=30_000)
         await asyncio.sleep(2)
-
-        # Tick the unhiem (include hidden) checkbox if present
-        try:
-            checkbox_container = page.locator("div#unhiem")
-            if await checkbox_container.count() > 0:
-                await checkbox_container.click()
-                await asyncio.sleep(0.5)
-                emit("Checked 'unhiem' checkbox.")
-        except Exception as exc:
-            logger.debug("unhiem checkbox not found or already checked: {}", exc)
-
         emit("Search page loaded.")
         return True
 
@@ -54,11 +43,6 @@ async def set_date_filter(
     end_date: str,
     emit_fn: Optional[Callable] = None,
 ) -> bool:
-    """
-    Set date range filters on the search page.
-    start_date / end_date must be in dd/MM/yyyy format.
-    """
-
     def emit(msg: str) -> None:
         logger.info(msg)
         if emit_fn:
@@ -67,12 +51,10 @@ async def set_date_filter(
     try:
         emit(f"Setting date range: {start_date} → {end_date}")
 
-        # Click start date span and fill
-        await _fill_date_picker(page, "span#tngay", start_date)
+        await _fill_date_picker(page, "#tngay", start_date)
         await asyncio.sleep(0.3)
 
-        # Click end date span and fill
-        await _fill_date_picker(page, "span#dngay", end_date)
+        await _fill_date_picker(page, "#dngay", end_date)
         await asyncio.sleep(0.3)
 
         emit(f"Date range set: {start_date} → {end_date}")
@@ -83,28 +65,21 @@ async def set_date_filter(
         emit(f"Date filter error: {exc}")
         return False
 
-
-async def _fill_date_picker(page: Page, selector: str, date_str: str) -> None:
-    """Click a date span and type the date value into the underlying input."""
-    span = page.locator(selector)
-    await span.click()
+async def _fill_date_picker(page: Page, container_selector: str, date_str: str) -> None:
+    """
+    Click date picker container, then fill the focused textbox (nth(2)).
+    Recorded from Playwright inspector.
+    """
+    # Click vào container để mở picker và focus input
+    container = page.locator(container_selector).get_by_role("textbox", name="Chọn thời điểm")
+    await container.click()
     await asyncio.sleep(0.3)
 
-    # Try to find associated input
-    input_sel = selector.replace("span", "input")
-    try:
-        inp = page.locator(input_sel)
-        if await inp.count() > 0:
-            await inp.fill(date_str)
-            await page.keyboard.press("Enter")
-            return
-    except Exception:
-        pass
-
-    # Fallback: type into the span itself
-    await page.keyboard.type(date_str, delay=50)
-    await page.keyboard.press("Enter")
-
+    # Sau khi click, input active luôn là nth(2)
+    inp = page.get_by_role("textbox", name="Chọn thời điểm").nth(2)
+    await inp.press("Control+a")
+    await inp.fill(date_str)
+    await inp.press("Enter")
 
 async def perform_search(page: Page, emit_fn: Optional[Callable] = None) -> bool:
     """Click the search button and wait for results."""
@@ -117,7 +92,7 @@ async def perform_search(page: Page, emit_fn: Optional[Callable] = None) -> bool
     for attempt in range(1, 4):
         try:
             emit(f"Clicking search button (attempt {attempt})…")
-            btn = page.locator('button:has-text("Tìm kiếm")')
+            btn = page.locator('button[type="submit"]:has-text("Tìm kiếm")')
             await btn.click()
 
             # Wait for loading overlay to disappear and table to appear

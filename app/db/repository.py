@@ -20,7 +20,7 @@ from app.extensions import db
 class InvoiceRepository:
     @staticmethod
     def upsert(data: Dict[str, Any]) -> Invoice:
-        """Insert or update an invoice identified by invoice_no + issue_date."""
+        """Insert or update an invoice identified by invoice_no + invoice_symbol."""
         existing = (
             db.session.query(Invoice)
             .filter_by(
@@ -45,6 +45,15 @@ class InvoiceRepository:
         return db.session.get(Invoice, invoice_id)
 
     @staticmethod
+    def get_by_invoice_no(invoice_no: str) -> Optional[Invoice]:
+        """Lookup by invoice_no — used by skip-if-exists check in invoice_detail.py."""
+        return (
+            db.session.query(Invoice)
+            .filter_by(invoice_no=invoice_no)
+            .first()
+        )
+
+    @staticmethod
     def get_all(
         page: int = 1,
         per_page: int = 20,
@@ -52,41 +61,51 @@ class InvoiceRepository:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         invoice_type: Optional[str] = None,
+        ghi_chu: Optional[str] = None,
+        thang_ke_khai: Optional[str] = None,
     ):
         query = db.session.query(Invoice)
+
         if search:
             like = f"%{search}%"
             query = query.filter(
                 Invoice.invoice_no.ilike(like)
                 | Invoice.seller_name.ilike(like)
                 | Invoice.buyer_name.ilike(like)
+                | Invoice.seller_tax_code.ilike(like)
             )
         if start_date:
             query = query.filter(Invoice.issue_date >= start_date)
         if end_date:
-            query = query.filter(Invoice.issue_date <= end_date)
+            # Include the full end_date day
+            from datetime import timedelta
+            query = query.filter(Invoice.issue_date < end_date + timedelta(days=1))
         if invoice_type:
             query = query.filter(Invoice.invoice_type == invoice_type)
+        if ghi_chu:
+            query = query.filter(Invoice.ghi_chu.ilike(f"%{ghi_chu}%"))
+        if thang_ke_khai:
+            query = query.filter(Invoice.thang_ke_khai.ilike(f"%{thang_ke_khai}%"))
+
         query = query.order_by(desc(Invoice.issue_date))
         return query.paginate(page=page, per_page=per_page, error_out=False)
 
     @staticmethod
     def stats() -> Dict[str, Any]:
-        total = db.session.query(func.count(Invoice.id)).scalar() or 0
-        total_vat = db.session.query(func.sum(Invoice.vat_amount)).scalar() or 0.0
+        total        = db.session.query(func.count(Invoice.id)).scalar() or 0
+        total_vat    = db.session.query(func.sum(Invoice.vat_amount)).scalar() or 0.0
         total_amount = db.session.query(func.sum(Invoice.total_amount)).scalar() or 0.0
-        today = datetime.utcnow().date()
-        today_count = (
+        today        = datetime.utcnow().date()
+        today_count  = (
             db.session.query(func.count(Invoice.id))
             .filter(func.date(Invoice.issue_date) == today)
-            .scalar()
-            or 0
+            .scalar() or 0
         )
         return {
             "total_invoices": total,
-            "total_vat": total_vat,
-            "total_amount": total_amount,
-            "today_count": today_count,
+            "total_vat":      total_vat,
+            "total_amount":   total_amount,
+            "today_count":    today_count,
         }
 
     @staticmethod
@@ -111,12 +130,27 @@ class InvoiceRepository:
     def get_for_export(
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        ghi_chu: Optional[str] = None,
+        thang_ke_khai: Optional[str] = None,
+        search: Optional[str] = None,
     ) -> List[Invoice]:
         query = db.session.query(Invoice)
         if start_date:
             query = query.filter(Invoice.issue_date >= start_date)
         if end_date:
-            query = query.filter(Invoice.issue_date <= end_date)
+            from datetime import timedelta
+            query = query.filter(Invoice.issue_date < end_date + timedelta(days=1))
+        if ghi_chu:
+            query = query.filter(Invoice.ghi_chu.ilike(f"%{ghi_chu}%"))
+        if thang_ke_khai:
+            query = query.filter(Invoice.thang_ke_khai.ilike(f"%{thang_ke_khai}%"))
+        if search:
+            like = f"%{search}%"
+            query = query.filter(
+                Invoice.invoice_no.ilike(like)
+                | Invoice.seller_name.ilike(like)
+                | Invoice.buyer_name.ilike(like)
+            )
         return query.order_by(Invoice.issue_date).all()
 
 
@@ -187,7 +221,7 @@ class SettingsRepository:
     def set(key: str, value: str) -> None:
         row = db.session.query(AppSetting).filter_by(key=key).first()
         if row:
-            row.value = value
+            row.value      = value
             row.updated_at = datetime.utcnow()
         else:
             db.session.add(AppSetting(key=key, value=value))

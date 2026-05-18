@@ -1,114 +1,299 @@
 {% extends "layout.html" %}
-{% block title %}Invoice #{{ invoice.invoice_no }} — GDT{% endblock %}
-{% block page_title %}Invoice Detail{% endblock %}
+{% block title %}Hóa đơn #{{ invoice.invoice_no }} — GDT{% endblock %}
+{% block page_title %}Chi tiết hóa đơn{% endblock %}
 
 {% block content %}
-<div class="mb-3">
+<div class="mb-3 d-flex gap-2">
   <a href="{{ url_for('invoices.index') }}" class="btn btn-sm btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i> Back to list
+    <i class="bi bi-arrow-left"></i> Quay lại danh sách
   </a>
+</div>
+
+<!-- ── Inline edit toast ── -->
+<div id="edit-toast" class="position-fixed top-0 end-0 p-3" style="z-index:9999; display:none;">
+  <div class="toast show" id="edit-toast-inner">
+    <div class="toast-body" id="edit-toast-msg"></div>
+  </div>
 </div>
 
 <div class="row g-3">
   <!-- ── Metadata ───────────────────────────── -->
   <div class="col-md-5">
     <div class="card mb-3">
-      <div class="card-header"><i class="bi bi-info-circle"></i> Invoice Metadata</div>
+      <div class="card-header"><i class="bi bi-info-circle"></i> Thông tin hóa đơn</div>
       <div class="card-body p-0">
         <table class="table mb-0" style="font-size:13px;">
           {% macro row(label, value, mono=False) %}
           <tr>
-            <td style="color:var(--text-muted); width:140px;">{{ label }}</td>
+            <td style="color:var(--text-muted); width:140px; font-size:12px;">{{ label }}</td>
             <td {% if mono %}style="font-family:var(--font-mono);"{% endif %}>{{ value or '—' }}</td>
           </tr>
           {% endmacro %}
-          {{ row('Invoice No', invoice.invoice_no, True) }}
-          {{ row('Symbol', invoice.invoice_symbol) }}
-          {{ row('Issue Date', invoice.issue_date[:10] if invoice.issue_date else '—') }}
-          {{ row('Status', invoice.status) }}
-          {{ row('Type', invoice.invoice_type) }}
-          <tr><td colspan="2" style="background:rgba(0,212,170,0.04); padding:6px 14px; color:var(--brand); font-size:11px; font-weight:600; letter-spacing:0.05em;">SELLER</td></tr>
-          {{ row('Name', invoice.seller_name) }}
-          {{ row('Tax Code', invoice.seller_tax_code, True) }}
-          <tr><td colspan="2" style="background:rgba(121,192,255,0.04); padding:6px 14px; color:#79c0ff; font-size:11px; font-weight:600; letter-spacing:0.05em;">BUYER</td></tr>
-          {{ row('Name', invoice.buyer_name) }}
-          {{ row('Tax Code', invoice.buyer_tax_code, True) }}
-          <tr><td colspan="2" style="background:rgba(63,185,80,0.04); padding:6px 14px; color:#3fb950; font-size:11px; font-weight:600; letter-spacing:0.05em;">AMOUNTS (VNĐ)</td></tr>
+          {{ row('Số hóa đơn',   invoice.invoice_no,     True) }}
+          {{ row('Ký hiệu',      invoice.invoice_symbol) }}
+          {{ row('Mẫu số',       invoice.invoice_form) }}
+          {{ row('Ngày phát hành', invoice.issue_date[:10] if invoice.issue_date else '—') }}
+          {{ row('Trạng thái',   invoice.status) }}
+          {{ row('Loại hóa đơn', invoice.invoice_type) }}
+          {{ row('Tiền tệ',      invoice.currency) }}
+          {{ row('Thanh toán',   invoice.payment_method) }}
           <tr>
-            <td style="color:var(--text-muted);">Amount</td>
-            <td style="font-family:var(--font-mono);">{{ "{:,.0f}".format(invoice.amount) }}</td>
+            <td colspan="2" style="background:var(--brand-dim); padding:6px 14px; color:var(--brand); font-size:10.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; border-bottom:1px solid var(--brand-border);">
+              NGƯỜI BÁN
+            </td>
+          </tr>
+          {{ row('Tên',          invoice.seller_name) }}
+          {{ row('Mã số thuế',   invoice.seller_tax_code,  True) }}
+          {{ row('Địa chỉ',      invoice.seller_address) }}
+          {{ row('Điện thoại',   invoice.seller_phone) }}
+          {{ row('Email',        invoice.seller_email) }}
+          {{ row('Số TK',        invoice.seller_bank) }}
+          {{ row('Ngân hàng',    invoice.seller_bank_name) }}
+          <tr>
+            <td colspan="2" style="background:#f0fdf4; padding:6px 14px; color:var(--success); font-size:10.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; border-bottom:1px solid var(--success-border);">
+              NGƯỜI MUA
+            </td>
+          </tr>
+          {{ row('Tên',          invoice.buyer_name) }}
+          {{ row('Mã số thuế',   invoice.buyer_tax_code,   True) }}
+          {{ row('Địa chỉ',      invoice.buyer_address) }}
+          <tr>
+            <td colspan="2" style="background:var(--warning-bg); padding:6px 14px; color:var(--warning); font-size:10.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; border-bottom:1px solid var(--warning-border);">
+              SỐ TIỀN (VNĐ)
+            </td>
           </tr>
           <tr>
-            <td style="color:var(--text-muted);">VAT</td>
-            <td style="font-family:var(--font-mono); color:#79c0ff;">{{ "{:,.0f}".format(invoice.vat_amount) }}</td>
+            <td style="color:var(--text-muted); font-size:12px;">Tiền hàng</td>
+            <td style="font-family:var(--font-mono);">{{ "{:,.0f}".format(invoice.amount|float) }}</td>
           </tr>
           <tr>
-            <td style="color:var(--text-muted); font-weight:600;">Total</td>
-            <td style="font-family:var(--font-mono); font-weight:700; color:var(--brand);">{{ "{:,.0f}".format(invoice.total_amount) }}</td>
+            <td style="color:var(--text-muted); font-size:12px;">Thuế suất GTGT</td>
+            <td style="font-family:var(--font-mono); color:var(--text-secondary);">{{ invoice.vat_rate or '—' }}</td>
           </tr>
+          <tr>
+            <td style="color:var(--text-muted); font-size:12px;">Thuế GTGT</td>
+            <td style="font-family:var(--font-mono); color:var(--info);">{{ "{:,.0f}".format(invoice.vat_amount|float) }}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-secondary); font-weight:600; font-size:12px;">Tổng cộng</td>
+            <td style="font-family:var(--font-mono); font-weight:700; color:var(--brand);">{{ "{:,.0f}".format(invoice.total_amount|float) }}</td>
+          </tr>
+          {% if invoice.total_in_words %}
+          <tr>
+            <td style="color:var(--text-muted); font-size:12px;">Bằng chữ</td>
+            <td style="font-size:11px;">{{ invoice.total_in_words }}</td>
+          </tr>
+          {% endif %}
+          {% if invoice.tax_authority_code %}
+          <tr>
+            <td colspan="2" style="background:#fdf2f2; padding:6px 14px; color:var(--danger); font-size:10.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; border-bottom:1px solid var(--danger-border);">
+              MÃ CƠ QUAN THUẾ
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" style="font-family:var(--font-mono); font-size:11px; word-break:break-all; padding:6px 14px;">{{ invoice.tax_authority_code }}</td>
+          </tr>
+          {% endif %}
         </table>
       </div>
     </div>
 
-    <!-- File links -->
+    <!-- ── Thông tin bổ sung (editable) ── -->
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-tags"></i> Thông tin bổ sung
+        <button class="btn btn-sm btn-outline-secondary ms-auto" id="btn-edit-extra" onclick="toggleEdit()">
+          <i class="bi bi-pencil"></i> Chỉnh sửa
+        </button>
+        <button class="btn btn-sm btn-brand ms-1" id="btn-save-extra" style="display:none;" onclick="saveExtra()">
+          <i class="bi bi-check-lg"></i> Lưu
+        </button>
+        <button class="btn btn-sm btn-outline-secondary ms-1" id="btn-cancel-extra" style="display:none;" onclick="cancelEdit()">
+          Hủy
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <table class="table mb-0" style="font-size:13px;" id="extra-view">
+          {% macro erow(label, value) %}
+          <tr>
+            <td style="color:var(--text-muted); width:160px; font-size:12px;">{{ label }}</td>
+            <td>{{ value or '—' }}</td>
+          </tr>
+          {% endmacro %}
+          {{ erow('Mặt hàng',          invoice.mat_hang) }}
+          {{ erow('Tháng kê khai',      invoice.thang_ke_khai) }}
+          {{ erow('Ghi chú / Loại',     invoice.ghi_chu) }}
+          {{ erow('Mã công trình',       invoice.ma_cong_trinh) }}
+          {{ erow('Chứng từ TT',         invoice.payment_note) }}
+          {{ erow('Ngân hàng TT',        invoice.bank_name) }}
+          {{ erow('Số hợp đồng',         invoice.so_hop_dong) }}
+          {{ erow('Ngày hợp đồng',       invoice.ngay_hop_dong) }}
+          {{ erow('HĐ bán ra tương ứng', invoice.hd_ban_ra_tuong_ung) }}
+        </table>
+        <div id="extra-edit" style="display:none;" class="p-3">
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label">Mặt hàng</label>
+              <textarea class="form-control form-control-sm" id="f-mat-hang" rows="2">{{ invoice.mat_hang or '' }}</textarea>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Tháng kê khai</label>
+              <input class="form-control form-control-sm" id="f-thang-ke-khai" value="{{ invoice.thang_ke_khai or '' }}" placeholder="QUÝ I/2026" />
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ghi chú / Loại</label>
+              <input class="form-control form-control-sm" id="f-ghi-chu" value="{{ invoice.ghi_chu or '' }}" placeholder="CHI PHÍ / THƯƠNG MẠI" />
+            </div>
+            <div class="col-6">
+              <label class="form-label">Mã công trình</label>
+              <input class="form-control form-control-sm" id="f-ma-cong-trinh" value="{{ invoice.ma_cong_trinh or '' }}" />
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ngân hàng TT</label>
+              <input class="form-control form-control-sm" id="f-bank-name" value="{{ invoice.bank_name or '' }}" placeholder="ACB / VCB…" />
+            </div>
+            <div class="col-12">
+              <label class="form-label">Chứng từ thanh toán</label>
+              <input class="form-control form-control-sm" id="f-payment-note" value="{{ invoice.payment_note or '' }}" placeholder="TT TIỀN MẶT / số tiền CK ngày…" />
+            </div>
+            <div class="col-6">
+              <label class="form-label">Số hợp đồng</label>
+              <input class="form-control form-control-sm" id="f-so-hop-dong" value="{{ invoice.so_hop_dong or '' }}" />
+            </div>
+            <div class="col-6">
+              <label class="form-label">Ngày hợp đồng</label>
+              <input class="form-control form-control-sm" id="f-ngay-hop-dong" value="{{ invoice.ngay_hop_dong or '' }}" placeholder="dd/mm/yyyy" />
+            </div>
+            <div class="col-12">
+              <label class="form-label">HĐ bán ra tương ứng</label>
+              <input class="form-control form-control-sm" id="f-hd-ban-ra" value="{{ invoice.hd_ban_ra_tuong_ung or '' }}" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── File downloads ── -->
     <div class="card">
-      <div class="card-header"><i class="bi bi-folder2-open"></i> Downloaded Files</div>
-      <div class="card-body">
-        {% if invoice.has_xml %}
+      <div class="card-header"><i class="bi bi-folder2-open"></i> Tải file</div>
+      <div class="card-body d-flex flex-column gap-2">
+        {% if invoice.zip_path %}
+        <a href="{{ url_for('invoices.api_download', invoice_id=invoice.id, file_type='zip') }}"
+           class="btn btn-outline-secondary w-100">
+          <i class="bi bi-file-zip" style="color:var(--success);"></i> Tải file ZIP gốc
+        </a>
+        {% else %}
+        <div style="font-size:12px; color:var(--text-muted);"><i class="bi bi-x-circle"></i> ZIP không tồn tại</div>
+        {% endif %}
+
+        {% if invoice.has_html and invoice.view_html_path %}
+        <a href="{{ url_for('invoices.api_download', invoice_id=invoice.id, file_type='html') }}"
+           class="btn btn-outline-secondary w-100">
+          <i class="bi bi-filetype-html" style="color:var(--warning);"></i> Tải HTML hiển thị hóa đơn
+        </a>
+        {% else %}
+        <div style="font-size:12px; color:var(--text-muted);"><i class="bi bi-x-circle"></i> HTML không tồn tại</div>
+        {% endif %}
+
+        {% if invoice.has_xml and invoice.xml_data_path %}
         <a href="{{ url_for('invoices.api_download', invoice_id=invoice.id, file_type='xml') }}"
-           class="btn btn-sm btn-outline-secondary w-100 mb-2">
-          <i class="bi bi-filetype-xml" style="color:var(--brand);"></i> Download XML
+           class="btn btn-outline-secondary w-100">
+          <i class="bi bi-filetype-xml" style="color:var(--brand);"></i> Tải XML dữ liệu
         </a>
-        {% else %}
-        <div class="text-muted mb-2" style="font-size:12px;"><i class="bi bi-x-circle"></i> XML not available</div>
         {% endif %}
-        {% if invoice.has_pdf %}
-        <a href="{{ url_for('invoices.api_download', invoice_id=invoice.id, file_type='pdf') }}"
-           class="btn btn-sm btn-outline-secondary w-100">
-          <i class="bi bi-filetype-pdf" style="color:#f85149;"></i> Download PDF
-        </a>
+
+        {% if invoice.has_html %}
+        <div>
+          <button class="btn btn-outline-secondary w-100" id="btn-pdf-{{ invoice.id }}"
+                  onclick="generatePdf('{{ invoice.id }}')">
+            <i class="bi bi-filetype-pdf" style="color:var(--danger);"></i> Xuất PDF
+          </button>
+          <div id="pdf-status-{{ invoice.id }}" class="mt-1" style="display:none; font-size:12px;"></div>
+        </div>
         {% else %}
-        <div class="text-muted" style="font-size:12px;"><i class="bi bi-x-circle"></i> PDF not available</div>
+        <div style="font-size:12px; color:var(--text-muted);"><i class="bi bi-x-circle"></i> PDF không khả dụng (thiếu HTML)</div>
         {% endif %}
-        {% if invoice.xml_path %}
-        <div class="mt-3 p-2" style="background:#0d1117; border-radius:6px; font-size:10px; font-family:var(--font-mono); color:#484f58; word-break:break-all;">
-          {{ invoice.xml_path }}
+
+        {% if invoice.xml_data_path %}
+        <div class="mt-1 p-2" style="background:#f0f4ff; border:1px solid var(--brand-border); border-radius:6px; font-size:10px; font-family:var(--font-mono); color:#374151; word-break:break-all; line-height:1.6;">
+          <i class="bi bi-folder2" style="color:var(--brand); margin-right:4px;"></i>{{ invoice.xml_data_path }}
         </div>
         {% endif %}
       </div>
     </div>
   </div>
 
-  <!-- ── XML Preview ────────────────────────── -->
+  <!-- ── Invoice HTML Preview & Line Items ──────────────── -->
   <div class="col-md-7">
-    {% if invoice.xml_content %}
+    {% if invoice.has_html and invoice.view_html_path %}
     <div class="card mb-3">
-      <div class="card-header"><i class="bi bi-code-slash"></i> XML Preview (first 5000 chars)</div>
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-text"></i> Hiển thị hóa đơn
+        <span class="ms-auto badge" style="background:var(--warning-bg); color:var(--warning); border:1px solid var(--warning-border); font-size:10px; padding:3px 9px; border-radius:20px;">
+          <i class="bi bi-filetype-html"></i> HTML
+        </span>
+        <a href="{{ url_for('invoices.api_download', invoice_id=invoice.id, file_type='html') }}"
+           target="_blank" class="btn btn-sm btn-outline-secondary" title="Mở toàn màn hình">
+          <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+      </div>
       <div class="card-body p-0">
-        <pre style="background:#0d1117; color:#79c0ff; font-size:11px; font-family:var(--font-mono); padding:14px; margin:0; border-radius:0 0 10px 10px; max-height:400px; overflow:auto; white-space:pre-wrap; word-break:break-all;">{{ invoice.xml_content | e }}</pre>
+        <div class="invoice-iframe-wrap">
+          <iframe id="invoice-preview-frame"
+            srcdoc="{{ invoice.view_html_content | default('') | e }}"
+            onload="autoResizeFrame(this)"></iframe>
+        </div>
+      </div>
+    </div>
+    {% elif invoice.xml_data_content %}
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-code-slash"></i> Nội dung XML dữ liệu
+        <span class="ms-auto badge" style="background:var(--brand-dim); color:var(--brand); border:1px solid var(--brand-border); font-size:10px; padding:3px 9px; border-radius:20px;">data XML</span>
+      </div>
+      <div class="card-body p-0">
+        <pre style="margin:0; border-radius:0 0 14px 14px; max-height:400px; overflow:auto;">{{ invoice.xml_data_content | e }}</pre>
       </div>
     </div>
     {% endif %}
 
     {% if invoice.line_items %}
     <div class="card">
-      <div class="card-header"><i class="bi bi-list-ul"></i> Line Items</div>
+      <div class="card-header"><i class="bi bi-list-ul"></i> Danh sách hàng hóa / dịch vụ</div>
       <div class="card-body p-0">
         <div style="overflow-x:auto;">
           <table class="table mb-0" style="font-size:12px;">
             <thead>
               <tr>
-                {% for key in invoice.line_items[0].keys() %}
-                <th>{{ key }}</th>
-                {% endfor %}
+                <th>STT</th>
+                <th>Tên hàng hóa, dịch vụ</th>
+                <th>Đơn vị</th>
+                <th class="text-end">Số lượng</th>
+                <th class="text-end">Đơn giá</th>
+                <th class="text-end">CK%</th>
+                <th class="text-end">Thành tiền</th>
+                <th class="text-end">Thuế suất</th>
+                <th class="text-end">Tiền thuế</th>
               </tr>
             </thead>
             <tbody>
               {% for item in invoice.line_items %}
               <tr>
-                {% for v in item.values() %}
-                <td>{{ v or '' }}</td>
-                {% endfor %}
+                <td>{{ item.stt }}</td>
+                <td style="max-width:220px;">{{ item.ten_hang }}</td>
+                <td style="color:var(--text-secondary);">{{ item.don_vi }}</td>
+                <td class="text-end" style="color:var(--text-secondary);">{{ item.so_luong }}</td>
+                <td class="text-end" style="font-family:var(--font-mono);">
+                  {{ "{:,.0f}".format(item.don_gia|float) if item.don_gia else '' }}
+                </td>
+                <td class="text-end" style="color:var(--text-secondary);">{{ item.tl_ck if item.tl_ck and item.tl_ck != '0' else '' }}</td>
+                <td class="text-end" style="font-family:var(--font-mono); font-weight:600; color:var(--text-primary);">
+                  {{ "{:,.0f}".format(item.thanh_tien|float) if item.thanh_tien else '' }}
+                </td>
+                <td class="text-end" style="color:var(--text-secondary);">{{ item.thue_suat }}</td>
+                <td class="text-end" style="font-family:var(--font-mono); color:var(--info);">
+                  {{ "{:,.0f}".format(item.tien_thue|float) if item.tien_thue else '' }}
+                </td>
               </tr>
               {% endfor %}
             </tbody>
@@ -119,4 +304,102 @@
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const INVOICE_ID = {{ invoice.id }};
+
+function autoResizeFrame(frame) {
+  try {
+    const doc = frame.contentDocument || frame.contentWindow.document;
+    if (!doc || !doc.body) return;
+    frame.style.width  = doc.body.scrollWidth  + 'px';
+    frame.style.height = doc.body.scrollHeight + 'px';
+  } catch (e) { console.error(e); }
+}
+
+// ── Inline edit ─────────────────────────────────────────────────
+function toggleEdit() {
+  document.getElementById('extra-view').style.display  = 'none';
+  document.getElementById('extra-edit').style.display  = '';
+  document.getElementById('btn-edit-extra').style.display   = 'none';
+  document.getElementById('btn-save-extra').style.display   = '';
+  document.getElementById('btn-cancel-extra').style.display = '';
+}
+
+function cancelEdit() {
+  document.getElementById('extra-view').style.display  = '';
+  document.getElementById('extra-edit').style.display  = 'none';
+  document.getElementById('btn-edit-extra').style.display   = '';
+  document.getElementById('btn-save-extra').style.display   = 'none';
+  document.getElementById('btn-cancel-extra').style.display = 'none';
+}
+
+async function saveExtra() {
+  const payload = {
+    mat_hang:            document.getElementById('f-mat-hang').value,
+    thang_ke_khai:       document.getElementById('f-thang-ke-khai').value,
+    ghi_chu:             document.getElementById('f-ghi-chu').value,
+    ma_cong_trinh:       document.getElementById('f-ma-cong-trinh').value,
+    payment_note:        document.getElementById('f-payment-note').value,
+    bank_name:           document.getElementById('f-bank-name').value,
+    so_hop_dong:         document.getElementById('f-so-hop-dong').value,
+    ngay_hop_dong:       document.getElementById('f-ngay-hop-dong').value,
+    hd_ban_ra_tuong_ung: document.getElementById('f-hd-ban-ra').value,
+  };
+  try {
+    const res  = await fetch(`/invoices/api/${INVOICE_ID}/extra`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('✅ Đã lưu thông tin bổ sung.', 'success');
+      setTimeout(() => window.location.reload(), 800);
+    } else {
+      showToast('❌ Lỗi: ' + (data.error || 'Unknown'), 'danger');
+    }
+  } catch(e) {
+    showToast('❌ ' + e, 'danger');
+  }
+}
+
+function showToast(msg, type) {
+  const el  = document.getElementById('edit-toast');
+  const inner = document.getElementById('edit-toast-inner');
+  const msgEl = document.getElementById('edit-toast-msg');
+  inner.className = `toast border-${type}`;
+  msgEl.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// ── PDF generation ───────────────────────────────────────────────
+async function generatePdf(invoiceId) {
+  const btn      = document.getElementById(`btn-pdf-${invoiceId}`);
+  const statusEl = document.getElementById(`pdf-status-${invoiceId}`);
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Đang xuất PDF…';
+  statusEl.style.display = 'none';
+  try {
+    const res  = await fetch(`/invoices/${invoiceId}/generate-pdf`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = `<a href="/invoices/${invoiceId}/download/pdf" class="btn btn-sm w-100 btn-brand"><i class="bi bi-download"></i> Tải PDF</a>`;
+    } else {
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = `<span style="color:var(--danger);"><i class="bi bi-x-circle"></i> ${data.error}</span>`;
+    }
+  } catch(e) {
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = `<span style="color:var(--danger);">Lỗi: ${e}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-filetype-pdf" style="color:var(--danger);"></i> Xuất PDF';
+  }
+}
+</script>
 {% endblock %}

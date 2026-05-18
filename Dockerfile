@@ -2,13 +2,6 @@ FROM python:3.11-slim-bookworm
 
 # ── System dependencies ──────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # OpenCV dependencies
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxrender1 \
-    libxext6 \
-    libgomp1 \
     # Playwright system dependencies
     libnss3 \
     libatk1.0-0 \

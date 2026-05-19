@@ -56,27 +56,44 @@ def _get_credentials() -> Tuple[str, str]:
     return username, password
 
 
-def _split_into_chunks(
-    start_month: int, start_year: int,
-    end_month: int,   end_year: int,
-    max_days: int = 31,
-) -> List[Tuple[str, str]]:
-    range_start = date(start_year, start_month, 1)
-    last_day    = monthrange(end_year, end_month)[1]
-    range_end   = date(end_year, end_month, last_day)
+def _split_into_chunks(start_date: date, end_date: date) -> List[Tuple[str, str]]:
+    """
+    Split [start_date, end_date] into per-calendar-month chunks.
+    Each chunk spans exactly one calendar month so day counts are always correct.
+    """
     chunks: List[Tuple[str, str]] = []
-    cursor = range_start
-    while cursor <= range_end:
-        chunk_end = min(cursor + timedelta(days=max_days - 1), range_end)
+    cursor = start_date
+    while cursor <= end_date:
+        month_end = date(cursor.year, cursor.month, monthrange(cursor.year, cursor.month)[1])
+        chunk_end = min(month_end, end_date)
         chunks.append((cursor.strftime("%d/%m/%Y"), chunk_end.strftime("%d/%m/%Y")))
-        cursor = chunk_end + timedelta(days=1)
+        if chunk_end.month == 12:
+            cursor = date(chunk_end.year + 1, 1, 1)
+        else:
+            cursor = date(chunk_end.year, chunk_end.month + 1, 1)
     return chunks
 
 
-def _compute_auto_sync_chunks() -> List[Tuple[str, str]]:
-    today   = date.today()
-    first_m = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
-    return _split_into_chunks(first_m.month, first_m.year, today.month, today.year)
+def _range_from_months_back(months_back: int) -> Tuple[date, date]:
+    """Return (start_date, today) going back `months_back` full calendar months."""
+    today = date.today()
+    y, m = today.year, today.month
+    for _ in range(months_back):
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    return date(y, m, 1), today
+
+
+def _compute_auto_sync_chunks(months_back: int = 2) -> List[Tuple[str, str]]:
+    start, end = _range_from_months_back(months_back)
+    return _split_into_chunks(start, end)
+
+
+def _parse_date_param(s: str) -> date:
+    """Parse YYYY-MM-DD from API param."""
+    return date.fromisoformat(s)
 
 
 # ─────────────────────────────────────────────────────────────────────── UI
@@ -176,14 +193,29 @@ def api_start():
     app  = current_app._get_current_object()
     mode = data.get("mode", "range")
 
-    if mode == "auto_sync":
+    # Auto-sync modes: 2m / 6m / 1y / custom-date
+    AUTO_SYNC_MONTHS = {"2m": 2, "6m": 6, "1y": 12}
+
+    if mode in AUTO_SYNC_MONTHS or mode == "custom_date":
         if get_auto_sync_state():
             return jsonify({"ok": False, "error": "Auto-sync is already running."}), 409
-        chunks = _compute_auto_sync_chunks()
+
+        if mode == "custom_date":
+            try:
+                start_d = _parse_date_param(data["start_date"])
+                end_d   = _parse_date_param(data["end_date"])
+            except (KeyError, ValueError):
+                return jsonify({"ok": False, "error": "Invalid start_date / end_date (YYYY-MM-DD)."}), 400
+            if start_d > end_d:
+                return jsonify({"ok": False, "error": "start_date must be ≤ end_date."}), 400
+            chunks = _split_into_chunks(start_d, end_d)
+        else:
+            chunks = _compute_auto_sync_chunks(months_back=AUTO_SYNC_MONTHS[mode])
+
         result = _launch_chunks(chunks, app, is_auto_sync=True)
 
     else:
-        # Manual range — cancel any running auto-sync first
+        # Legacy manual-range mode (kept for backward compat)
         if get_auto_sync_state():
             _auto_sync_stop.set()
             stop_crawl()
@@ -203,8 +235,11 @@ def api_start():
         if date(start_year, start_month, 1) > date(end_year, end_month, 1):
             return jsonify({"ok": False, "error": "Start must be before or equal to end."}), 400
 
-        chunks = _split_into_chunks(start_month, start_year, end_month, end_year)
-        result = _launch_chunks(chunks, app, is_auto_sync=False)
+        start_d = date(start_year, start_month, 1)
+        last    = monthrange(end_year, end_month)[1]
+        end_d   = date(end_year, end_month, last)
+        chunks  = _split_into_chunks(start_d, end_d)
+        result  = _launch_chunks(chunks, app, is_auto_sync=False)
 
     if not result["ok"]:
         return jsonify(result), 400
@@ -263,6 +298,40 @@ def api_captcha_refresh():
 
 @bp.get("/api/chunks-preview")
 def api_chunks_preview():
+    """
+    Supports two calling conventions:
+      1. ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD   (new — date picker)
+      2. ?months_back=N                                 (preset buttons)
+      3. ?start_month=M&start_year=Y&end_month=M&end_year=Y  (legacy)
+    """
+    # Convention 1 — explicit date range
+    sd_raw = request.args.get("start_date")
+    ed_raw = request.args.get("end_date")
+    if sd_raw and ed_raw:
+        try:
+            start_d = _parse_date_param(sd_raw)
+            end_d   = _parse_date_param(ed_raw)
+        except ValueError:
+            return jsonify({"error": "Invalid date params"}), 400
+        chunks = _split_into_chunks(start_d, end_d)
+        return jsonify({"chunks": [{"start": s, "end": e} for s, e in chunks]})
+
+    # Convention 2 — months_back preset
+    mb_raw = request.args.get("months_back")
+    if mb_raw:
+        try:
+            months_back = int(mb_raw)
+        except ValueError:
+            return jsonify({"error": "Invalid months_back"}), 400
+        chunks = _compute_auto_sync_chunks(months_back=months_back)
+        start_d, end_d = _range_from_months_back(months_back)
+        return jsonify({
+            "chunks": [{"start": s, "end": e} for s, e in chunks],
+            "range_start": start_d.strftime("%d/%m/%Y"),
+            "range_end":   end_d.strftime("%d/%m/%Y"),
+        })
+
+    # Convention 3 — legacy month/year selectors
     try:
         start_month = int(request.args.get("start_month", 0))
         start_year  = int(request.args.get("start_year",  0))
@@ -274,5 +343,8 @@ def api_chunks_preview():
     if not all([start_month, start_year, end_month, end_year]):
         return jsonify({"chunks": []})
 
-    chunks = _split_into_chunks(start_month, start_year, end_month, end_year)
+    start_d = date(start_year, start_month, 1)
+    last    = monthrange(end_year, end_month)[1]
+    end_d   = date(end_year, end_month, last)
+    chunks  = _split_into_chunks(start_d, end_d)
     return jsonify({"chunks": [{"start": s, "end": e} for s, e in chunks]})

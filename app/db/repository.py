@@ -54,6 +54,26 @@ class InvoiceRepository:
         )
 
     @staticmethod
+    def exists_by_composite_key(
+        invoice_no: str,
+        invoice_symbol: Optional[str] = None,
+        invoice_form: Optional[str] = None,
+    ) -> Optional[Invoice]:
+        """
+        Lookup by (invoice_no, invoice_symbol, invoice_form).
+
+        Dùng để check skip chính xác hơn get_by_invoice_no — tránh false-positive
+        khi cùng invoice_no nhưng khác ký hiệu / mẫu (ví dụ hóa đơn điều chỉnh).
+        Trả về Invoice nếu tìm thấy, None nếu chưa có.
+        """
+        query = db.session.query(Invoice).filter_by(invoice_no=invoice_no)
+        if invoice_symbol is not None:
+            query = query.filter_by(invoice_symbol=invoice_symbol)
+        if invoice_form is not None:
+            query = query.filter_by(invoice_form=invoice_form)
+        return query.first()
+
+    @staticmethod
     def get_all(
         page: int = 1,
         per_page: int = 20,

@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 
 from app.db.repository import InvoiceRepository
-from app.services.xml_service import XmlService
 
 
 class InvoiceService:
@@ -46,14 +45,14 @@ class InvoiceService:
 
         detail = invoice.to_dict()
 
+        # line_items đã được lưu vào DB (line_items_json) — lấy trực tiếp từ đó,
+        # không cần parse lại từ file XML.
+        # xml_data_content chỉ dùng để hiển thị raw XML trên UI, không lưu DB.
         xml_data_path = detail.get("xml_data_path")
         if xml_data_path:
             xml_file = Path(xml_data_path)
             if xml_file.exists():
-                raw_bytes = xml_file.read_bytes()
-                if not detail.get("line_items"):
-                    detail["line_items"] = XmlService.parse_line_items(raw_bytes)
-                detail["xml_data_content"] = raw_bytes.decode("utf-8", errors="replace")[:5000]
+                detail["xml_data_content"] = xml_file.read_text(encoding="utf-8", errors="replace")[:5000]
             else:
                 logger.warning("xml_data_path trỏ tới file không tồn tại: {}", xml_data_path)
 

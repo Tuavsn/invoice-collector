@@ -44,35 +44,19 @@
         <div id="panel-range">
           <div class="row g-2 mb-2">
             <div class="col-6">
-              <label class="form-label">Start Month / Year</label>
-              <div class="d-flex gap-1">
-                <select id="inp-start-month" class="form-select" onchange="previewChunks()">
-                  {% for m in range(1,13) %}
-                  <option value="{{ m }}">{{ '%02d'|format(m) }}</option>
-                  {% endfor %}
-                </select>
-                <input type="number" id="inp-start-year" class="form-control" style="width:90px;"
-                       value="{{ now_year }}" min="2020" max="2099" onchange="previewChunks()" />
-              </div>
+              <label class="form-label">Từ ngày</label>
+              <input type="date" id="inp-start-date" class="form-control" oninput="previewChunks()" />
             </div>
             <div class="col-6">
-              <label class="form-label">End Month / Year</label>
-              <div class="d-flex gap-1">
-                <select id="inp-end-month" class="form-select" onchange="previewChunks()">
-                  {% for m in range(1,13) %}
-                  <option value="{{ m }}" {{ 'selected' if loop.index == now_month }}>{{ '%02d'|format(m) }}</option>
-                  {% endfor %}
-                </select>
-                <input type="number" id="inp-end-year" class="form-control" style="width:90px;"
-                       value="{{ now_year }}" min="2020" max="2099" onchange="previewChunks()" />
-              </div>
+              <label class="form-label">Đến ngày</label>
+              <input type="date" id="inp-end-date" class="form-control" oninput="previewChunks()" />
             </div>
           </div>
 
           <!-- Chunk Preview -->
           <div id="chunk-preview" class="mb-3" style="display:none;">
             <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.06em;">
-              <i class="bi bi-grid-3x3-gap"></i> Will run as <strong id="chunk-count" style="color:var(--brand);">—</strong> chunk(s):
+              <i class="bi bi-grid-3x3-gap"></i> Sẽ chạy thành <strong id="chunk-count" style="color:var(--brand);">—</strong> chunk:
             </div>
             <div id="chunk-list" style="font-size:11px; font-family:var(--font-mono); color:var(--text-secondary); max-height:80px; overflow-y:auto; background:var(--surface-2); border-radius:var(--radius-sm); padding:8px 10px; border:1px solid var(--border);"></div>
           </div>
@@ -80,18 +64,37 @@
 
         <!-- Auto Sync Mode -->
         <div id="panel-autosync" style="display:none;">
-          <div class="p-3 mb-3" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); font-size:13px;">
-            <div class="d-flex align-items-center gap-2 mb-2">
-              <i class="bi bi-arrow-repeat" style="color:var(--brand);"></i>
-              <strong>Automatic Daily Sync</strong>
+          <!-- Preset buttons -->
+          <div class="mb-3">
+            <label class="form-label">Chọn khoảng thời gian</label>
+            <div class="d-flex gap-2 flex-wrap mb-2">
+              <button class="btn btn-sm btn-outline-secondary autosync-preset active" data-preset="2m" onclick="selectPreset(this,'2m')">2 tháng</button>
+              <button class="btn btn-sm btn-outline-secondary autosync-preset" data-preset="6m" onclick="selectPreset(this,'6m')">6 tháng</button>
+              <button class="btn btn-sm btn-outline-secondary autosync-preset" data-preset="1y" onclick="selectPreset(this,'1y')">1 năm</button>
+              <button class="btn btn-sm btn-outline-secondary autosync-preset" data-preset="custom_date" onclick="selectPreset(this,'custom_date')">Tùy chỉnh</button>
             </div>
-            <div style="color:var(--text-secondary); font-size:12px; line-height:1.6;">
-              Syncs invoices from the <strong>last 2 calendar months</strong> up to today.
-              The range is automatically split into 30-day chunks and processed sequentially.
-              <br><br>
-              <span style="color:var(--text-muted);">Schedule this via cron / task scheduler for daily runs.</span>
+          </div>
+
+          <!-- Custom date range (hidden unless preset=custom_date) -->
+          <div id="autosync-custom-dates" style="display:none;" class="mb-3">
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label" style="font-size:12px;">Từ ngày</label>
+                <input type="date" id="autosync-start-date" class="form-control form-control-sm"
+                       oninput="previewAutoSyncChunks()" />
+              </div>
+              <div class="col-6">
+                <label class="form-label" style="font-size:12px;">Đến ngày</label>
+                <input type="date" id="autosync-end-date" class="form-control form-control-sm"
+                       oninput="previewAutoSyncChunks()" />
+              </div>
             </div>
-            <div id="autosync-range" class="mt-2" style="font-family:var(--font-mono); font-size:12px; color:var(--brand);"></div>
+          </div>
+
+          <!-- Range info + chunk preview -->
+          <div class="p-3 mb-3" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); font-size:12px;">
+            <div id="autosync-range" style="font-family:var(--font-mono); color:var(--brand); margin-bottom:6px;"></div>
+            <div id="autosync-chunk-preview" style="color:var(--text-muted);"></div>
           </div>
         </div>
 
@@ -232,42 +235,97 @@ function switchMode(mode) {
   currentMode = mode;
   document.getElementById('panel-range').style.display     = mode === 'range'     ? 'block' : 'none';
   document.getElementById('panel-autosync').style.display  = mode === 'auto_sync' ? 'block' : 'none';
-  document.getElementById('tab-range').className      = 'btn btn-sm flex-grow-1 tab-btn ' + (mode === 'range'     ? 'btn-brand'            : 'btn-outline-secondary');
-  document.getElementById('tab-autosync').className   = 'btn btn-sm flex-grow-1 tab-btn ' + (mode === 'auto_sync' ? 'btn-brand'            : 'btn-outline-secondary');
+  document.getElementById('tab-range').className      = 'btn btn-sm flex-grow-1 tab-btn ' + (mode === 'range'     ? 'btn-brand' : 'btn-outline-secondary');
+  document.getElementById('tab-autosync').className   = 'btn btn-sm flex-grow-1 tab-btn ' + (mode === 'auto_sync' ? 'btn-brand' : 'btn-outline-secondary');
 
   if (mode === 'auto_sync') {
-    // Show computed range
-    const today     = new Date();
-    const firstM    = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const fmt       = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-    const todayFmt  = fmt(today);
-    const startFmt  = fmt(firstM);
-    document.getElementById('autosync-range').textContent = `📅 ${startFmt} → ${todayFmt}`;
+    previewAutoSyncChunks();
   } else {
     previewChunks();
   }
 }
 
-// ── Chunk preview ─────────────────────────────────────────────────────────────
+// ── Preset selector ───────────────────────────────────────────────────────────
+let currentPreset = '2m';  // default
+
+function selectPreset(btn, preset) {
+  currentPreset = preset;
+  document.querySelectorAll('.autosync-preset').forEach(b => b.classList.remove('active', 'btn-brand'));
+  document.querySelectorAll('.autosync-preset').forEach(b => b.classList.add('btn-outline-secondary'));
+  btn.classList.remove('btn-outline-secondary');
+  btn.classList.add('active', 'btn-brand');
+
+  const customDates = document.getElementById('autosync-custom-dates');
+  customDates.style.display = preset === 'custom_date' ? 'block' : 'none';
+
+  if (preset !== 'custom_date') {
+    // Pre-fill date inputs with the computed range for visual feedback
+    const today = new Date();
+    const monthsMap = { '2m': 2, '6m': 6, '1y': 12 };
+    const months = monthsMap[preset];
+    const start = new Date(today.getFullYear(), today.getMonth() - months, 1);
+    document.getElementById('autosync-start-date').value = toIso(start);
+    document.getElementById('autosync-end-date').value   = toIso(today);
+  }
+  previewAutoSyncChunks();
+}
+
+function toIso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ── Auto-sync chunk preview ───────────────────────────────────────────────────
+let autoPreviewTimer = null;
+async function previewAutoSyncChunks() {
+  clearTimeout(autoPreviewTimer);
+  autoPreviewTimer = setTimeout(async () => {
+    const rangeEl  = document.getElementById('autosync-range');
+    const chunkEl  = document.getElementById('autosync-chunk-preview');
+
+    let url;
+    if (currentPreset === 'custom_date') {
+      const sd = document.getElementById('autosync-start-date').value;
+      const ed = document.getElementById('autosync-end-date').value;
+      if (!sd || !ed) { rangeEl.textContent = ''; chunkEl.textContent = ''; return; }
+      url = `/crawler/api/chunks-preview?start_date=${sd}&end_date=${ed}`;
+    } else {
+      const monthsMap = { '2m': 2, '6m': 6, '1y': 12 };
+      url = `/crawler/api/chunks-preview?months_back=${monthsMap[currentPreset]}`;
+    }
+
+    try {
+      const data   = await (await fetch(url)).json();
+      const chunks = data.chunks || [];
+      if (data.range_start) {
+        rangeEl.innerHTML = `📅 ${data.range_start} → ${data.range_end}`;
+      } else if (chunks.length) {
+        rangeEl.innerHTML = `📅 ${chunks[0].start} → ${chunks[chunks.length-1].end}`;
+      }
+      chunkEl.innerHTML = chunks.length
+        ? `<i class="bi bi-grid-3x3-gap"></i> ${chunks.length} chunk(s): ` +
+          chunks.map((c, i) => `<span style="color:var(--text-muted);">#${i+1}</span> ${c.start}→${c.end}`).join(' | ')
+        : '';
+    } catch(e) {}
+  }, 300);
+}
+
+// ── Range chunk preview (date pickers) ───────────────────────────────────────
 let previewTimer = null;
 async function previewChunks() {
   clearTimeout(previewTimer);
   previewTimer = setTimeout(async () => {
-    const sm = document.getElementById('inp-start-month').value;
-    const sy = document.getElementById('inp-start-year').value;
-    const em = document.getElementById('inp-end-month').value;
-    const ey = document.getElementById('inp-end-year').value;
-
-    if (!sm || !sy || !em || !ey) return;
+    const sd = document.getElementById('inp-start-date').value;
+    const ed = document.getElementById('inp-end-date').value;
+    if (!sd || !ed) return;
 
     try {
-      const res  = await fetch(`/crawler/api/chunks-preview?start_month=${sm}&start_year=${sy}&end_month=${em}&end_year=${ey}`);
-      const data = await res.json();
+      const res    = await fetch(`/crawler/api/chunks-preview?start_date=${sd}&end_date=${ed}`);
+      const data   = await res.json();
       const chunks = data.chunks || [];
 
-      const preview  = document.getElementById('chunk-preview');
-      const listEl   = document.getElementById('chunk-list');
-      const countEl  = document.getElementById('chunk-count');
+      const preview = document.getElementById('chunk-preview');
+      const listEl  = document.getElementById('chunk-list');
+      const countEl = document.getElementById('chunk-count');
 
       if (chunks.length === 0) { preview.style.display = 'none'; return; }
 
@@ -277,7 +335,7 @@ async function previewChunks() {
       ).join('<br>');
       preview.style.display = 'block';
     } catch(e) {}
-  }, 400);
+  }, 300);
 }
 
 // ── Captcha ───────────────────────────────────────────────────────────────────
@@ -354,19 +412,43 @@ async function startCrawl() {
   let body = { mode: currentMode };
 
   if (currentMode === 'range') {
-    body.start_month = parseInt(document.getElementById('inp-start-month').value);
-    body.start_year  = parseInt(document.getElementById('inp-start-year').value);
-    body.end_month   = parseInt(document.getElementById('inp-end-month').value);
-    body.end_year    = parseInt(document.getElementById('inp-end-year').value);
+    const sd = document.getElementById('inp-start-date').value;
+    const ed = document.getElementById('inp-end-date').value;
+    if (!sd || !ed) {
+      appendLog('❌ Vui lòng chọn ngày bắt đầu và kết thúc.', 'error'); return;
+    }
+    body.start_date = sd;
+    body.end_date   = ed;
+    // map to legacy fields for backend compat
+    const [sy, sm] = sd.split('-');
+    const [ey, em] = ed.split('-');
+    body.start_month = parseInt(sm); body.start_year = parseInt(sy);
+    body.end_month   = parseInt(em); body.end_year   = parseInt(ey);
 
-    if (!body.start_month || !body.start_year || !body.end_month || !body.end_year) {
-      appendLog('❌ Please fill in all month/year fields.', 'error'); return;
+  } else {
+    // auto_sync variants
+    if (currentPreset === 'custom_date') {
+      const sd = document.getElementById('autosync-start-date').value;
+      const ed = document.getElementById('autosync-end-date').value;
+      if (!sd || !ed) {
+        appendLog('❌ Vui lòng chọn ngày tùy chỉnh.', 'error'); return;
+      }
+      body.mode       = 'custom_date';
+      body.start_date = sd;
+      body.end_date   = ed;
+    } else {
+      body.mode = currentPreset;  // '2m' | '6m' | '1y'
     }
   }
 
-  appendLog(`Starting crawl in ${currentMode === 'auto_sync' ? 'auto-sync' : 'range'} mode…`, 'info');
+  const modeLabel = {
+    'range': 'Date Range', '2m': '2 tháng', '6m': '6 tháng',
+    '1y': '1 năm', 'custom_date': 'Tùy chỉnh',
+  }[body.mode] || body.mode;
+  appendLog(`▶ Bắt đầu crawl — chế độ: ${modeLabel}…`, 'info');
+
   if (currentMode === 'range' && isAutoSync) {
-    appendLog('⛔ Cancelling auto-sync to run manual range crawl…', 'warn');
+    appendLog('⛔ Đang hủy auto-sync để chạy thủ công…', 'warn');
   }
   try {
     const res  = await fetch('/crawler/api/start', {
@@ -377,12 +459,12 @@ async function startCrawl() {
     const data = await res.json();
     if (data.ok) {
       const n = data.total_chunks || data.chunks?.length || 1;
-      appendLog(`✓ Queued ${n} chunk(s). Jobs will run sequentially.`, 'success');
+      appendLog(`✓ Đã xếp hàng ${n} chunk. Các job sẽ chạy tuần tự.`, 'success');
       setRunning(true);
     } else {
       appendLog(`❌ ${data.error}`, 'error');
     }
-  } catch (e) { appendLog(`❌ Request failed: ${e}`, 'error'); }
+  } catch (e) { appendLog(`❌ Request thất bại: ${e}`, 'error'); }
 }
 
 async function stopCrawl() {
@@ -450,7 +532,20 @@ setInterval(async () => {
 if (isRunning)   setRunning(true);
 if (isAutoSync)  setAutoSync(true);
 
-// Init
-previewChunks();
+// Init — set default date range to current month for the range picker
+(function initDatePickers() {
+  const today = new Date();
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const toIsoLocal = d =>
+    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const sd = document.getElementById('inp-start-date');
+  const ed = document.getElementById('inp-end-date');
+  if (sd && !sd.value) sd.value = toIsoLocal(firstOfMonth);
+  if (ed && !ed.value) ed.value = toIsoLocal(today);
+  previewChunks();
+  // Trigger preset init for auto-sync panel
+  const defaultBtn = document.querySelector('.autosync-preset[data-preset="2m"]');
+  if (defaultBtn) selectPreset(defaultBtn, '2m');
+})();
 </script>
 {% endblock %}

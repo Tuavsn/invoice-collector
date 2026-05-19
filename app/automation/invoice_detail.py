@@ -14,7 +14,6 @@ Không còn tự parse XML tại đây — tất cả delegate sang XmlService.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import zipfile
 from datetime import date
@@ -116,22 +115,25 @@ async def extract_row_data(row_locator) -> Dict[str, Any]:
         return texts[idx] if idx < len(texts) else default
 
     return {
-        "row_index":      _get(0),
-        "tax_code":       _get(1),
-        "invoice_no":     _get(2),
-        "invoice_symbol": _get(3),
-        "invoice_form":   _get(4),
-        "issue_date_str": _get(5),
-        "buyer_info":     _get(6),
-        "amount_str":     _get(7,  "0"),
-        "vat_rate_str":   _get(8),
-        "vat_str":        _get(9,  "0"),
-        "exempt_str":     _get(10, "0"),
-        "total_str":      _get(11, "0"),
-        "currency":       _get(12),
-        "invoice_type":   _get(13),
-        "status":         _get(14),
-        "raw_texts":      texts,
+        "row_index":              _get(0),
+        "tax_code":               _get(1),
+        "invoice_form":           _get(2),
+        "invoice_symbol":         _get(3),
+        "invoice_no":             _get(4),
+        "issue_date_str":         _get(5),
+        "invoice_info":           _get(6),
+        "amount_before_tax":      _get(7, "0"),
+        "tax_amount":             _get(8, "0"),
+        "discount_amount":        _get(9, "0"),
+        "fee_amount":             _get(10, "0"),
+        "total_payment":          _get(11, "0"),
+        "currency":               _get(12),
+        "invoice_status":         _get(13),
+        "processing_result":      _get(14),
+        "verification_result":    _get(15),
+        "related_invoice":        _get(16),
+        "related_info":           _get(17),
+        "raw_texts":              texts,
     }
 
 
@@ -149,22 +151,38 @@ def parse_date_str(raw: str) -> Optional[date]:
 
 # ─────────────────────────────────────── Already-crawled check
 
-def _is_already_crawled(invoice_no: str) -> bool:
+def _is_already_crawled(
+    invoice_no: str,
+    invoice_symbol: Optional[str] = None,
+    invoice_form: Optional[str] = None,
+    issue_date_str: str = "",
+    total_payment: str = "0",
+) -> bool:
     """
-    Trả về True nếu hóa đơn đã tồn tại trong DB với status không phải 'failed'/'error'.
+    Trả về True nếu hóa đơn đã tồn tại trong DB và không ở trạng thái lỗi.
 
-    Yêu cầu InvoiceRepository có method:
-        get_by_invoice_no(invoice_no: str) -> Optional[Invoice]
-    Nếu chưa có, thêm vào repository.py:
-        @staticmethod
-        def get_by_invoice_no(invoice_no: str):
-            return Invoice.query.filter_by(invoice_no=invoice_no).first()
+    Check theo composite key (invoice_no + invoice_symbol + invoice_form) thay
+    vì chỉ invoice_no — tránh bỏ qua nhầm hóa đơn điều chỉnh/thay thế có cùng
+    số nhưng khác ký hiệu / mẫu.
+
+    issue_date_str và total_payment được log ra để dễ debug, không dùng để query
+    (DB đã có các trường này từ XML nên không nên so sánh chuỗi thô từ bảng).
     """
     if not invoice_no or invoice_no.startswith("unknown_"):
         return False
     try:
-        existing = InvoiceRepository.get_by_invoice_no(invoice_no)
+        existing = InvoiceRepository.exists_by_composite_key(
+            invoice_no=invoice_no,
+            invoice_symbol=invoice_symbol or None,
+            invoice_form=invoice_form or None,
+        )
         if existing and existing.status not in ("failed", "error"):
+            logger.debug(
+                "Skip #{} symbol={} form={} date={} total={} — already in DB (id={}, status={})",
+                invoice_no, invoice_symbol, invoice_form,
+                issue_date_str, total_payment,
+                existing.id, existing.status,
+            )
             return True
     except Exception as exc:
         logger.warning("DB check for invoice #{} failed: {}", invoice_no, exc)
@@ -174,6 +192,11 @@ def _is_already_crawled(invoice_no: str) -> bool:
 # ─────────────────────────────────────── Download button helper
 
 async def _find_button_by_tooltip(page: Page, tooltip_text: str):
+    """
+    Locate the export button by its SVG icon ID, then verify via tooltip.
+    Uses dispatch_event to trigger hover without sleeping — waits for tooltip
+    to appear with a tight timeout before moving to next candidate.
+    """
     indices = await page.evaluate("""
         () => {
             const buttons = [...document.querySelectorAll('button')];
@@ -189,39 +212,59 @@ async def _find_button_by_tooltip(page: Page, tooltip_text: str):
         btn = page.locator("button").nth(idx)
         await btn.dispatch_event("mouseenter")
         await btn.dispatch_event("mouseover")
-        await asyncio.sleep(0.5)
         try:
             await page.locator(
                 f'.ant-tooltip-inner:has-text("{tooltip_text}")'
-            ).wait_for(state="visible", timeout=3_000)
+            ).wait_for(state="visible", timeout=2_000)
             return btn
         except Exception:
+            # Tooltip didn't appear — dismiss and try next button
+            await btn.dispatch_event("mouseleave")
             continue
     return None
 
 
 async def download_zip(page: Page, invoice_dir: Path) -> Optional[Path]:
-    """Click nút 'Xuất xml' và lưu file ZIP trả về."""
+    """
+    Click 'Xuất xml' button and save the downloaded ZIP.
+
+    Strategy:
+      1. Fast path — positional selector from recording (div:nth-child(8) > .ant-btn)
+         Works as long as button order doesn't change.
+      2. Fallback — tooltip-based detection via _find_button_by_tooltip.
+    """
     dest = invoice_dir / "invoice.zip"
-    try:
-        btn = await _find_button_by_tooltip(page, "Xuất xml")
-        if btn is None:
-            logger.warning("XML export button not found")
+
+    async def _do_download(btn) -> Optional[Path]:
+        try:
+            async with page.expect_download(timeout=60_000) as dl_info:
+                await btn.click()
+            download = await dl_info.value
+            await download.save_as(str(dest))
+            logger.info("ZIP downloaded → {}", dest.name)
+            return dest
+        except Exception as exc:
+            logger.warning("Download click failed: {}", exc)
             return None
-        async with page.expect_download(timeout=60_000) as dl_info:
-            await btn.click()
-        download = await dl_info.value
-        await download.save_as(str(dest))
-        logger.info("ZIP downloaded → {}", dest.name)
-        return dest
-    except Exception as exc:
-        logger.warning("download_zip failed: {}", exc)
+
+    # ── Fast path
+    fast_btn = page.locator("div:nth-child(8) > .ant-btn").first
+    if await fast_btn.count() > 0:
+        result = await _do_download(fast_btn)
+        if result:
+            return result
+        logger.debug("Fast-path download failed, trying tooltip fallback…")
+
+    # ── Fallback: tooltip detection
+    btn = await _find_button_by_tooltip(page, "Xuất xml")
+    if btn is None:
+        logger.warning("XML export button not found via tooltip either")
         return None
+    return await _do_download(btn)
 
 
 # ─────────────────────────────────────── Main per-row processor
 
-# Sentinel để phân biệt "bỏ qua có chủ đích" với "lỗi thật" (None)
 class _Skipped:
     pass
 
@@ -233,9 +276,13 @@ async def process_invoice_row(
     row_locator,
     row_index: int,
     emit_fn: Optional[Callable[[str], None]] = None,
+    invoice_category: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Pipeline xử lý một dòng hóa đơn.
+    invoice_category: giá trị từ SubTabConfig (sale_einvoice / sale_pos /
+                      purchase_einvoice / purchase_pos) — phân loại crawl,
+                      khác hoàn toàn với invoice_type (THDon từ XML).
     Trả về:
       - dict  → thành công, cần persist
       - SKIPPED → hóa đơn đã có trong DB, bỏ qua
@@ -255,7 +302,13 @@ async def process_invoice_row(
         issue_date     = parse_date_str(issue_date_str) or date.today()
 
         # ── 2. Skip nếu đã crawl
-        if _is_already_crawled(invoice_no):
+        if _is_already_crawled(
+            invoice_no=invoice_no,
+            invoice_symbol=row_data.get("invoice_symbol") or None,
+            invoice_form=row_data.get("invoice_form") or None,
+            issue_date_str=issue_date_str,
+            total_payment=row_data.get("total_payment", "0"),
+        ):
             emit(f"  ⏭ Row {row_index + 1}: Invoice #{invoice_no} already in DB — skipped.")
             return SKIPPED
 
@@ -263,9 +316,16 @@ async def process_invoice_row(
 
         inv_dir = ensure_invoice_dir(invoice_no, issue_date)
 
-        # ── 3. Click chọn dòng
+        # ── 3. Click chọn dòng, wait for action panel / buttons to appear
         await row_locator.click()
-        await asyncio.sleep(0.3)
+        try:
+            await page.wait_for_selector(
+                ".ant-btn, button",
+                state="visible",
+                timeout=5_000,
+            )
+        except Exception:
+            pass  # Buttons may already be present
 
         # ── 4. Download ZIP
         zip_path = await download_zip(page, inv_dir)
@@ -276,16 +336,19 @@ async def process_invoice_row(
             extract = extract_invoice_zip(zip_path, inv_dir / "extracted")
 
         # ── 6. Parse XML
-        xml_meta:   Dict[str, Any]       = {}
-        line_items: List[Dict[str, Any]] = []
+        xml_meta:      Dict[str, Any]       = {}
+        line_items:    List[Dict[str, Any]] = []
+        vat_breakdown: List[Dict[str, Any]] = []
 
         if extract.data_xml_path and extract.data_xml_path.exists():
-            raw_bytes  = extract.data_xml_path.read_bytes()
-            xml_meta   = XmlService.parse_metadata(raw_bytes)
-            line_items = XmlService.parse_line_items(raw_bytes)
+            raw_bytes     = extract.data_xml_path.read_bytes()
+            xml_meta      = XmlService.parse_metadata(raw_bytes)
+            line_items    = XmlService.parse_line_items(raw_bytes)
+            vat_breakdown = xml_meta.pop("vat_breakdown", [])
             logger.info(
-                "XML parsed: {} line items | seller={} | total={}",
+                "XML parsed: {} line items | {} vat brackets | seller={} | total={}",
                 len(line_items),
+                len(vat_breakdown),
                 xml_meta.get("seller_name", "—"),
                 xml_meta.get("total_amount", 0),
             )
@@ -299,37 +362,71 @@ async def process_invoice_row(
             return xml_meta.get(key) or fallback
 
         result: Dict[str, Any] = {
+            # ── Hóa đơn
             "invoice_no":     xml_or("invoice_no",     invoice_no),
             "invoice_symbol": xml_or("invoice_symbol", row_data.get("invoice_symbol", "")),
             "invoice_form":   xml_or("invoice_form",   row_data.get("invoice_form",   "")),
-            "invoice_type":   xml_or("invoice_type",   row_data.get("invoice_type",   "")),
+            # invoice_type  = THDon từ XML (loại hóa đơn theo chuẩn GDT, ví dụ "1"=GTGT)
+            "invoice_type":   xml_meta.get("invoice_type_gdt"),
+            # invoice_category = phân loại crawl từ SubTabConfig — KHÔNG lấy từ XML
+            "invoice_category": invoice_category,
             "issue_date":     xml_or("issue_date",     issue_date_str),
-            "status":         row_data.get("status", "downloaded"),
-            "currency":       xml_or("currency",       row_data.get("currency",       "")),
-            "payment_method": xml_or("payment_method", ""),
-            "seller_name":      xml_or("seller_name"),
-            "seller_tax_code":  xml_or("seller_tax_code"),
-            "seller_address":   xml_or("seller_address"),
-            "seller_phone":     xml_or("seller_phone"),
-            "seller_email":     xml_or("seller_email"),
-            "seller_bank":      xml_or("seller_bank"),
-            "seller_bank_name": xml_or("seller_bank_name"),
-            "buyer_name":     xml_or("buyer_name"),
-            "buyer_tax_code": xml_or("buyer_tax_code"),
-            "buyer_address":  xml_or("buyer_address"),
-            "amount":       xml_meta.get("amount")       if "amount"       in xml_meta else parse_amount(row_data.get("amount_str", "0")),
-            "vat_rate":     xml_or("vat_rate",     row_data.get("vat_rate_str", "")),
-            "vat_amount":   xml_meta.get("vat_amount")   if "vat_amount"   in xml_meta else parse_amount(row_data.get("vat_str",    "0")),
-            "total_amount": xml_meta.get("total_amount") if "total_amount" in xml_meta else parse_amount(row_data.get("total_str",  "0")),
-            "total_in_words":     xml_or("total_in_words"),
-            "tax_authority_code": xml_or("tax_authority_code"),
-            "qr_data":            xml_or("qr_data"),
+            # status luôn là "downloaded" tại bước crawl; các trạng thái khác
+            # (failed, error, ...) được set bởi các bước xử lý sau
+            "status":         "downloaded",
+            "currency":       xml_or("currency",       row_data.get("currency", "")),
+            "exchange_rate":  xml_meta.get("exchange_rate"),
+            "payment_method": xml_meta.get("payment_method"),
+            # ── XML meta
+            "xml_version":       xml_meta.get("xml_version"),
+            "software_tax_code": xml_meta.get("software_tax_code"),
+            "is_adjustment":     xml_meta.get("is_adjustment"),
+            "portal_link":       xml_meta.get("portal_link"),
+            "fkey":              xml_meta.get("fkey"),
+            # ── Ngày ký
+            "seller_signing_time": xml_meta.get("seller_signing_time"),
+            "tax_signing_time":    xml_meta.get("tax_signing_time"),
+            # ── Người bán — tất cả chỉ từ XML, không fallback từ bảng
+            "seller_name":      xml_meta.get("seller_name"),
+            "seller_tax_code":  xml_or("seller_tax_code", row_data.get("tax_code", "")),
+            "seller_address":   xml_meta.get("seller_address"),
+            "seller_phone":     xml_meta.get("seller_phone"),
+            "seller_email":     xml_meta.get("seller_email"),
+            "seller_bank":      xml_meta.get("seller_bank"),
+            "seller_bank_name": xml_meta.get("seller_bank_name"),
+            "seller_fax":       xml_meta.get("seller_fax"),
+            "seller_website":   xml_meta.get("seller_website"),
+            # ── Người mua — tất cả chỉ từ XML
+            "buyer_name":      xml_meta.get("buyer_name"),
+            "buyer_tax_code":  xml_meta.get("buyer_tax_code"),
+            "buyer_address":   xml_meta.get("buyer_address"),
+            "buyer_phone":     xml_meta.get("buyer_phone"),
+            "buyer_email":     xml_meta.get("buyer_email"),
+            "buyer_bank":      xml_meta.get("buyer_bank"),
+            "buyer_bank_name": xml_meta.get("buyer_bank_name"),
+            # ── Số tiền (ưu tiên XML, fallback bảng)
+            "amount":             xml_meta.get("amount")       if "amount"       in xml_meta else parse_amount(row_data.get("amount_before_tax", "0")),
+            "vat_rate":           xml_meta.get("vat_rate"),
+            "vat_amount":         xml_meta.get("vat_amount")   if "vat_amount"   in xml_meta else parse_amount(row_data.get("tax_amount",        "0")),
+            "total_amount":       xml_meta.get("total_amount") if "total_amount" in xml_meta else parse_amount(row_data.get("total_payment",     "0")),
+            "total_in_words":     xml_meta.get("total_in_words"),
+            "discount_amount":    xml_meta.get("discount_amount"),
+            "non_taxable_amount": xml_meta.get("non_taxable_amount"),
+            "other_amount":       xml_meta.get("other_amount"),
+            # ── Thuế chi tiết
+            "vat_breakdown": vat_breakdown,
+            # ── Mã CQT / QR
+            "tax_authority_code": xml_meta.get("tax_authority_code"),
+            "qr_data":            xml_meta.get("qr_data"),
+            # ── Hàng hóa / dịch vụ
             "line_items":  line_items,
-            "zip_path":       str(zip_path)               if zip_path                  else None,
-            "xml_data_path":  str(extract.data_xml_path)  if extract.data_xml_path    else None,
-            "view_html_path": str(extract.view_html_path) if extract.view_html_path   else None,
+            # ── Đường dẫn file
+            "zip_path":       str(zip_path)               if zip_path                else None,
+            "xml_data_path":  str(extract.data_xml_path)  if extract.data_xml_path  else None,
+            "view_html_path": str(extract.view_html_path) if extract.view_html_path else None,
             "pdf_path":       None,
             "invoice_dir":    str(inv_dir),
+            # ── Flags
             "has_zip":  zip_path is not None and zip_path.exists(),
             "has_xml":  extract.data_xml_path is not None,
             "has_html": extract.view_html_path is not None,
@@ -349,9 +446,8 @@ async def process_invoice_row(
             f"ZIP={'✓' if result['has_zip'] else '✗'} "
             f"XML={'✓' if result['has_xml'] else '✗'} "
             f"HTML={'✓' if result['has_html'] else '✗'} "
-            f"items={len(line_items)}"
+            f"items={len(line_items)} vat_brackets={len(vat_breakdown)}"
         )
-        await asyncio.sleep(0.3)
         return result
 
     except Exception as exc:

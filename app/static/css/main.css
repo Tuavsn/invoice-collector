@@ -397,16 +397,18 @@ body {
   text-transform: uppercase;
   color: var(--text-muted);
   border-bottom: 2px solid var(--border) !important;
-  padding: 10px 16px;
+  padding: 8px 10px;
   white-space: nowrap;
   background: #f9fafb;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table td {
   border-bottom: 1px solid var(--border);
-  padding: 12px 16px;
-  vertical-align: middle;
-  font-size: 13px;
+  padding: 8px 10px;
+  vertical-align: top;
+  font-size: 12px;
   color: var(--text-primary);
 }
 
@@ -727,3 +729,44 @@ hr { border-color: var(--border); }
   #main-content { margin-left: 0; }
   .page-content { padding: 16px; }
 }
+
+/* ── Invoice table optimizations ───────────────────────────── */
+/* Ensure card-body scroll container works well */
+.card-body[style*="overflow-x:auto"],
+.card-body[style*="overflow-x: auto"] {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Keep number columns tight, allow text columns to wrap */
+.table td.num-col {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Row 2 (info bổ sung) – tags wrap nicely */
+.table tbody tr[style*="brand-dim"] td {
+  padding-top: 4px !important;
+  padding-bottom: 6px !important;
+}
+
+/* Reduce vertical padding for compact rows */
+.table.table-compact td,
+.table.table-compact th {
+  padding: 6px 8px;
+}
+
+/* Sticky number column */
+.table th:first-child,
+.table td:first-child {
+  position: sticky;
+  left: 0;
+  background: #f9fafb;
+  z-index: 2;
+  box-shadow: 2px 0 4px rgba(0,0,0,0.04);
+}
+
+.table tbody tr:hover td:first-child {
+  background: #f0f7ff;
+}
+

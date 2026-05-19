@@ -27,56 +27,83 @@ class Invoice(db.Model):  # type: ignore[name-defined]
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    # ── Thông tin hóa đơn
+    # ── Thông tin hóa đơn (TTChung)
     invoice_no:     Mapped[str]            = mapped_column(String(100), nullable=False, index=True)
-    invoice_symbol: Mapped[Optional[str]]  = mapped_column(String(50))
-    invoice_form:   Mapped[Optional[str]]  = mapped_column(String(50))
-    invoice_type:   Mapped[Optional[str]]  = mapped_column(String(50))
-    issue_date:     Mapped[Optional[datetime]] = mapped_column(DateTime)
+    invoice_symbol: Mapped[Optional[str]]  = mapped_column(String(50))   # KHHDon
+    invoice_form:   Mapped[Optional[str]]  = mapped_column(String(50))   # KHMSHDon
+    invoice_type:     Mapped[Optional[str]]  = mapped_column(String(50))   # THDon — loại HĐ theo chuẩn GDT (từ XML)
+    invoice_category: Mapped[Optional[str]]  = mapped_column(String(50))   # Phân loại crawl: sale_einvoice | sale_pos | purchase_einvoice | purchase_pos
+    issue_date:       Mapped[Optional[datetime]] = mapped_column(DateTime)  # NLap
     status:         Mapped[Optional[str]]  = mapped_column(String(50))
-    currency:       Mapped[Optional[str]]  = mapped_column(String(10))
-    payment_method: Mapped[Optional[str]]  = mapped_column(String(100))
+    currency:       Mapped[Optional[str]]  = mapped_column(String(10))   # DVTTe
+    exchange_rate:  Mapped[Optional[float]] = mapped_column(Float)        # TGia — TỶ GIÁ (thường=1)
+    payment_method: Mapped[Optional[str]]  = mapped_column(String(100))  # HTTToan
 
-    # ── Người bán
-    seller_name:      Mapped[Optional[str]] = mapped_column(String(500))
-    seller_tax_code:  Mapped[Optional[str]] = mapped_column(String(50))
-    seller_address:   Mapped[Optional[str]] = mapped_column(String(500))
-    seller_phone:     Mapped[Optional[str]] = mapped_column(String(50))
-    seller_email:     Mapped[Optional[str]] = mapped_column(String(200))
-    seller_bank:      Mapped[Optional[str]] = mapped_column(String(100))
-    seller_bank_name: Mapped[Optional[str]] = mapped_column(String(200))
+    # ── Thông tin XML phiên bản & phần mềm
+    xml_version:    Mapped[Optional[str]]  = mapped_column(String(20))   # PBan
+    software_tax_code: Mapped[Optional[str]] = mapped_column(String(50)) # MSTTCGP — MST tổ chức cấp phép
+    is_adjustment:  Mapped[Optional[int]]  = mapped_column(Integer)      # HDCTTChinh (0=gốc, 1=điều chỉnh, 2=thay thế)
+    portal_link:    Mapped[Optional[str]]  = mapped_column(String(500))  # TTKhac[PortalLink]
+    fkey:           Mapped[Optional[str]]  = mapped_column(String(100))  # TTKhac[Fkey]
 
-    # ── Người mua
-    buyer_name:     Mapped[Optional[str]] = mapped_column(String(500))
-    buyer_tax_code: Mapped[Optional[str]] = mapped_column(String(50), index=True)
-    buyer_address:  Mapped[Optional[str]] = mapped_column(String(500))
+    # ── Ngày ký
+    seller_signing_time: Mapped[Optional[datetime]] = mapped_column(DateTime)  # DSCKS/NBan/SigningTime
+    tax_signing_time:    Mapped[Optional[datetime]] = mapped_column(DateTime)  # DSCKS/CQT/SigningTime
 
-    # ── Số tiền
-    amount:         Mapped[float] = mapped_column(Float, default=0.0)
-    vat_amount:     Mapped[float] = mapped_column(Float, default=0.0)
-    total_amount:   Mapped[float] = mapped_column(Float, default=0.0)
-    total_in_words: Mapped[Optional[str]] = mapped_column(String(500))
+    # ── Người bán (NBan)
+    seller_name:      Mapped[Optional[str]] = mapped_column(String(500))  # Ten
+    seller_tax_code:  Mapped[Optional[str]] = mapped_column(String(50))   # MST
+    seller_address:   Mapped[Optional[str]] = mapped_column(String(500))  # DChi
+    seller_phone:     Mapped[Optional[str]] = mapped_column(String(50))   # SDThoai
+    seller_email:     Mapped[Optional[str]] = mapped_column(String(200))  # DCTDTu
+    seller_bank:      Mapped[Optional[str]] = mapped_column(String(100))  # STKNHang
+    seller_bank_name: Mapped[Optional[str]] = mapped_column(String(200))  # TNHang
+    seller_fax:       Mapped[Optional[str]] = mapped_column(String(50))   # Fax
+    seller_website:   Mapped[Optional[str]] = mapped_column(String(200))  # Website
+
+    # ── Người mua (NMua)
+    buyer_name:      Mapped[Optional[str]] = mapped_column(String(500))  # Ten
+    buyer_tax_code:  Mapped[Optional[str]] = mapped_column(String(50), index=True)  # MST
+    buyer_address:   Mapped[Optional[str]] = mapped_column(String(500))  # DChi
+    buyer_phone:     Mapped[Optional[str]] = mapped_column(String(50))   # SDThoai ← MỚI
+    buyer_email:     Mapped[Optional[str]] = mapped_column(String(200))  # DCTDTu  ← MỚI (nếu có)
+    buyer_bank:      Mapped[Optional[str]] = mapped_column(String(100))  # STKNHang ← MỚI
+    buyer_bank_name: Mapped[Optional[str]] = mapped_column(String(200))  # TNHang   ← MỚI
+
+    # ── Số tiền (TToan)
+    amount:               Mapped[float] = mapped_column(Float, default=0.0)   # TgTCThue
+    vat_amount:           Mapped[float] = mapped_column(Float, default=0.0)   # TgTThue
+    total_amount:         Mapped[float] = mapped_column(Float, default=0.0)   # TgTTTBSo
+    total_in_words:       Mapped[Optional[str]] = mapped_column(String(500))  # TgTTTBChu
+    discount_amount:      Mapped[Optional[float]] = mapped_column(Float)      # TTCKTMai ← MỚI
+    non_taxable_amount:   Mapped[Optional[float]] = mapped_column(Float)      # TGTKCThue ← MỚI
+    other_amount:         Mapped[Optional[float]] = mapped_column(Float)      # TGTKhac   ← MỚI
 
     # ── Thuế suất
     vat_rate: Mapped[Optional[str]] = mapped_column(String(20))  # "8%", "10%", "KCT", "KKKNT"
 
+    # ── Chi tiết thuế theo mức thuế suất (JSON array: [{TSuat, ThTien, TThue}, ...])
+    vat_breakdown_json: Mapped[Optional[str]] = mapped_column(Text)  # THTTLTSuat ← MỚI
+
     # ── Mã cơ quan thuế / QR
-    tax_authority_code: Mapped[Optional[str]] = mapped_column(String(100))
-    qr_data:            Mapped[Optional[str]] = mapped_column(Text)
+    tax_authority_code: Mapped[Optional[str]] = mapped_column(String(100))  # MCCQT
+    qr_data:            Mapped[Optional[str]] = mapped_column(Text)          # DLQRCode
 
     # ── Hàng hóa / dịch vụ (JSON array)
+    # Mỗi phần tử gồm: STT, MHHDVu, THHDVu, DVTinh, SLuong, DGia,
+    #                   TLCKhau, STCKhau, ThTien, TSuat, TChat, TTHHDTrung
     line_items_json: Mapped[Optional[str]] = mapped_column(Text)
 
     # ── Mô tả mặt hàng tổng hợp (từ bảng kê Excel)
     mat_hang: Mapped[Optional[str]] = mapped_column(Text)
 
     # ── Kê khai / thanh toán
-    thang_ke_khai:  Mapped[Optional[str]] = mapped_column(String(20), index=True)  # "QUÝ I/2026"
-    payment_note:   Mapped[Optional[str]] = mapped_column(String(500))              # Nội dung chứng từ TT
-    bank_name:      Mapped[Optional[str]] = mapped_column(String(100))              # Ngân hàng
+    thang_ke_khai:  Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    payment_note:   Mapped[Optional[str]] = mapped_column(String(500))
+    bank_name:      Mapped[Optional[str]] = mapped_column(String(100))
 
     # ── Phân loại & theo dõi
-    ghi_chu:        Mapped[Optional[str]] = mapped_column(String(500), index=True)  # CHI PHÍ / THƯƠNG MẠI…
+    ghi_chu:        Mapped[Optional[str]] = mapped_column(String(500), index=True)
     ma_cong_trinh:  Mapped[Optional[str]] = mapped_column(String(100), index=True)
     so_hop_dong:    Mapped[Optional[str]] = mapped_column(String(200))
     ngay_hop_dong:  Mapped[Optional[str]] = mapped_column(String(50))
@@ -117,6 +144,14 @@ class Invoice(db.Model):  # type: ignore[name-defined]
         except (json.JSONDecodeError, TypeError):
             return []
 
+    def get_vat_breakdown(self) -> List[Dict[str, Any]]:
+        if not self.vat_breakdown_json:
+            return []
+        try:
+            return json.loads(self.vat_breakdown_json)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
     def to_dict(self) -> dict:
         return {
             "id":             self.id,
@@ -124,11 +159,22 @@ class Invoice(db.Model):  # type: ignore[name-defined]
             "invoice_no":     self.invoice_no,
             "invoice_symbol": self.invoice_symbol,
             "invoice_form":   self.invoice_form,
-            "invoice_type":   self.invoice_type,
-            "issue_date":     self.issue_date.isoformat() if self.issue_date else None,
+            "invoice_type":     self.invoice_type,
+            "invoice_category": self.invoice_category,
+            "issue_date":       self.issue_date.isoformat() if self.issue_date else None,
             "status":         self.status,
             "currency":       self.currency,
+            "exchange_rate":  self.exchange_rate,
             "payment_method": self.payment_method,
+            # XML meta
+            "xml_version":       self.xml_version,
+            "software_tax_code": self.software_tax_code,
+            "is_adjustment":     self.is_adjustment,
+            "portal_link":       self.portal_link,
+            "fkey":              self.fkey,
+            # Ngày ký
+            "seller_signing_time": self.seller_signing_time.isoformat() if self.seller_signing_time else None,
+            "tax_signing_time":    self.tax_signing_time.isoformat()    if self.tax_signing_time    else None,
             # Người bán
             "seller_name":      self.seller_name,
             "seller_tax_code":  self.seller_tax_code,
@@ -137,16 +183,27 @@ class Invoice(db.Model):  # type: ignore[name-defined]
             "seller_email":     self.seller_email,
             "seller_bank":      self.seller_bank,
             "seller_bank_name": self.seller_bank_name,
+            "seller_fax":       self.seller_fax,
+            "seller_website":   self.seller_website,
             # Người mua
-            "buyer_name":     self.buyer_name,
-            "buyer_tax_code": self.buyer_tax_code,
-            "buyer_address":  self.buyer_address,
+            "buyer_name":      self.buyer_name,
+            "buyer_tax_code":  self.buyer_tax_code,
+            "buyer_address":   self.buyer_address,
+            "buyer_phone":     self.buyer_phone,
+            "buyer_email":     self.buyer_email,
+            "buyer_bank":      self.buyer_bank,
+            "buyer_bank_name": self.buyer_bank_name,
             # Số tiền
-            "amount":         self.amount,
-            "vat_rate":       self.vat_rate,
-            "vat_amount":     self.vat_amount,
-            "total_amount":   self.total_amount,
-            "total_in_words": self.total_in_words,
+            "amount":             self.amount,
+            "vat_rate":           self.vat_rate,
+            "vat_amount":         self.vat_amount,
+            "total_amount":       self.total_amount,
+            "total_in_words":     self.total_in_words,
+            "discount_amount":    self.discount_amount,
+            "non_taxable_amount": self.non_taxable_amount,
+            "other_amount":       self.other_amount,
+            # Thuế chi tiết
+            "vat_breakdown": self.get_vat_breakdown(),
             # Mã CQT / QR
             "tax_authority_code": self.tax_authority_code,
             "qr_data":            self.qr_data,

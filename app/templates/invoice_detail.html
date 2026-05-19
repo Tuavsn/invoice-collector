@@ -280,13 +280,13 @@
               {% for item in invoice.line_items %}
               <tr>
                 <td>{{ item.stt }}</td>
-                <td style="max-width:220px;">{{ item.ten_hang }}</td>
-                <td style="color:var(--text-secondary);">{{ item.don_vi }}</td>
+                <td style="max-width:220px;">{{ item.ten_hhdvu }}</td>
+                <td style="color:var(--text-secondary);">{{ item.don_vi_tinh }}</td>
                 <td class="text-end" style="color:var(--text-secondary);">{{ item.so_luong }}</td>
                 <td class="text-end" style="font-family:var(--font-mono);">
                   {{ "{:,.0f}".format(item.don_gia|float) if item.don_gia else '' }}
                 </td>
-                <td class="text-end" style="color:var(--text-secondary);">{{ item.tl_ck if item.tl_ck and item.tl_ck != '0' else '' }}</td>
+                <td class="text-end" style="color:var(--text-secondary);">{{ item.ty_le_ck if item.ty_le_ck and item.ty_le_ck != 0 else '' }}</td>
                 <td class="text-end" style="font-family:var(--font-mono); font-weight:600; color:var(--text-primary);">
                   {{ "{:,.0f}".format(item.thanh_tien|float) if item.thanh_tien else '' }}
                 </td>

@@ -110,9 +110,11 @@ class ExcelService:
             search=search,
         )
 
-        # Separate purchase vs sale; if invoice_type not set, treat all as purchase
-        mua_vao = [i for i in invoices if (i.invoice_type or "").upper() != "SALE"]
-        ban_ra  = [i for i in invoices if (i.invoice_type or "").upper() == "SALE"]
+        # Phân loại theo invoice_category (được gán từ SubTabConfig khi crawl):
+        #   sale_einvoice | sale_pos        → bán ra
+        #   purchase_einvoice | purchase_pos → mua vào
+        mua_vao = [i for i in invoices if not (i.invoice_category or "").startswith("sale_")]
+        ban_ra  = [i for i in invoices if     (i.invoice_category or "").startswith("sale_")]
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename  = f"bang_ke_hoa_don_{timestamp}.xlsx"

@@ -13,11 +13,13 @@
       </div>
       <div class="col-md-2">
         <label class="form-label">Từ ngày</label>
-        <input type="text" name="start_date" id="filter-start" class="form-control" placeholder="dd/mm/yyyy" value="{{ start_date }}" />
+        <input type="date" name="start_date" id="filter-start" class="form-control"
+               data-dmy="{{ start_date }}" />
       </div>
       <div class="col-md-2">
         <label class="form-label">Đến ngày</label>
-        <input type="text" name="end_date" id="filter-end" class="form-control" placeholder="dd/mm/yyyy" value="{{ end_date }}" />
+        <input type="date" name="end_date" id="filter-end" class="form-control"
+               data-dmy="{{ end_date }}" />
       </div>
       <div class="col-md-2">
         <label class="form-label">Ghi chú / Loại</label>
@@ -110,107 +112,120 @@
       {{ pagination.total }} tổng
     </span>
     <div class="ms-auto d-flex gap-2">
+      <!-- ── Column picker ── -->
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" id="btn-col-picker"
+                data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+          <i class="bi bi-layout-three-columns"></i> Cột hiển thị
+        </button>
+        <div class="dropdown-menu p-2" id="col-picker-menu"
+             style="min-width:220px; max-height:420px; overflow-y:auto; font-size:12px;">
+          <div class="d-flex justify-content-between mb-2 px-1">
+            <button class="btn btn-xs btn-link p-0 text-decoration-none" style="font-size:11px;" onclick="colPickerAll(true)">Chọn tất cả</button>
+            <button class="btn btn-xs btn-link p-0 text-decoration-none" style="font-size:11px;" onclick="colPickerAll(false)">Bỏ tất cả</button>
+          </div>
+          <div class="dropdown-divider mt-0 mb-1"></div>
+        </div>
+      </div>
       <button class="btn btn-sm btn-outline-secondary" id="btn-export" onclick="exportExcel()">
         <i class="bi bi-file-earmark-spreadsheet" style="color:var(--success);"></i> Xuất Excel
       </button>
     </div>
   </div>
   <div class="card-body p-0" style="overflow-x:auto;">
-    <table class="table table-hover mb-0" style="font-size:10px; min-width:1400px;">
+    <table class="table table-hover mb-0" style="font-size:10px; min-width:2400px;" id="inv-table">
       <thead>
         <tr>
-          <th>Số HĐ</th>
-          <th>Ký hiệu</th>
-          <th>Ngày lập</th>
-          <th>Người bán</th>
-          <th>MST bán</th>
-          <th>Người mua</th>
-          <th>MST mua</th>
-          <th>Mặt hàng</th>
-          <th class="text-end">Tiền hàng</th>
-          <th class="text-end">Thuế suất</th>
-          <th class="text-end">Thuế GTGT</th>
-          <th class="text-end">Tổng tiền</th>
-          <th>Loại HĐ</th>
-          <th>Trạng thái</th>
-          <th>Kê khai</th>
-          <th>Số HĐ</th>
-          <th>Ngày HĐ</th>
-          <th>Mã CT</th>
-          <th>Chứng từ TT</th>
-          <th>Ngân hàng</th>
-          <th>HĐ bán ra</th>
-          <th>Ghi chú</th>
-          <th class="text-center">Files</th>
-          <th></th>
+          <th data-col="invoice_no" style="white-space:nowrap;">Số HĐ</th>
+          <th data-col="invoice_symbol">Ký hiệu</th>
+          <th data-col="invoice_form">Mẫu số</th>
+          <th data-col="issue_date" style="white-space:nowrap;">Ngày lập</th>
+          <th data-col="status">Trạng thái</th>
+          <th data-col="invoice_type" style="white-space:nowrap;">Loại HĐ</th>
+          <th data-col="payment_method" style="white-space:nowrap;">Thanh toán</th>
+          <th data-col="seller_name">Người bán</th>
+          <th data-col="seller_tax_code" style="white-space:nowrap;">MST bán</th>
+          <th data-col="seller_phone" style="white-space:nowrap;">ĐT bán</th>
+          <th data-col="seller_email">Email bán</th>
+          <th data-col="seller_bank" style="white-space:nowrap;">Số TK</th>
+          <th data-col="seller_bank_name">Ngân hàng bán</th>
+          <th data-col="buyer_name">Người mua</th>
+          <th data-col="buyer_tax_code" style="white-space:nowrap;">MST mua</th>
+          <th data-col="amount" class="text-end" style="white-space:nowrap;">Tiền hàng</th>
+          <th data-col="vat_rate" class="text-end" style="white-space:nowrap;">Thuế suất</th>
+          <th data-col="vat_amount" class="text-end" style="white-space:nowrap;">Thuế GTGT</th>
+          <th data-col="total_amount" class="text-end" style="white-space:nowrap;">Tổng tiền</th>
+          <th data-col="mat_hang">Mặt hàng</th>
+          <th data-col="thang_ke_khai" style="white-space:nowrap;">Kê khai</th>
+          <th data-col="ghi_chu">Ghi chú</th>
+          <th data-col="ma_cong_trinh" style="white-space:nowrap;">Mã CT</th>
+          <th data-col="payment_note" style="white-space:nowrap;">Chứng từ TT</th>
+          <th data-col="bank_name" style="white-space:nowrap;">NH thanh toán</th>
+          <th data-col="so_hop_dong" style="white-space:nowrap;">Số HĐ</th>
+          <th data-col="ngay_hop_dong" style="white-space:nowrap;">Ngày HĐ</th>
+          <th data-col="hd_ban_ra_tuong_ung" style="white-space:nowrap;">HĐ bán ra</th>
+          <th data-col="_actions"></th>
         </tr>
       </thead>
       <tbody>
         {% for inv in pagination.items %}
         <tr id="row-{{ inv.id }}">
-          <td><a href="{{ url_for('invoices.detail', invoice_id=inv.id) }}" style="font-family:var(--font-mono); text-decoration:none; color:var(--brand);">{{ inv.invoice_no }}</a></td>
-          <td style="color:var(--text-secondary);">{{ inv.invoice_symbol or '—' }}</td>
-          <td style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">
+          {# ── Thông tin hóa đơn ── #}
+          <td data-col="invoice_no" style="white-space:nowrap;"><a href="{{ url_for('invoices.detail', invoice_id=inv.id) }}" style="font-family:var(--font-mono); text-decoration:none; color:var(--brand);">{{ inv.invoice_no }}</a></td>
+          <td data-col="invoice_symbol" style="color:var(--text-secondary);">{{ inv.invoice_symbol or '—' }}</td>
+          <td data-col="invoice_form" style="color:var(--text-secondary);">{{ inv.invoice_form or '—' }}</td>
+          <td data-col="issue_date" style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">
             {{ inv.issue_date.strftime('%d/%m/%Y') if inv.issue_date else '—' }}
           </td>
-          <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.seller_name }}">
-            {{ inv.seller_name or '—' }}
-          </td>
-          <td style="font-family:var(--font-mono); color:var(--text-secondary);">{{ inv.seller_tax_code or '—' }}</td>
-          <td style="max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.buyer_name or '' }}">
-            {{ inv.buyer_name or '—' }}
-          </td>
-          <td style="font-family:var(--font-mono); color:var(--text-secondary);">{{ inv.buyer_tax_code or '—' }}</td>
-          <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.mat_hang or '' }}">
-            {{ inv.mat_hang or '—' }}
-          </td>
-          <td class="text-end" style="font-family:var(--font-mono); color:var(--text-secondary);">
-            {{ "{:,.0f}".format(inv.amount) }}
-          </td>
-          <td class="text-end" style="color:var(--text-secondary);">{{ inv.vat_rate or '—' }}</td>
-          <td class="text-end" style="font-family:var(--font-mono); color:var(--info);">
-            {{ "{:,.0f}".format(inv.vat_amount) }}
-          </td>
-          <td class="text-end" style="font-family:var(--font-mono); font-weight:700; color:var(--brand);">
-            {{ "{:,.0f}".format(inv.total_amount) }}
-          </td>
-          <td style="font-size:10px; color:var(--text-secondary); white-space:nowrap;">{{ inv.invoice_type or '—' }}</td>
-          <td style="font-size:10px;">
+          <td data-col="status">
             {% if inv.status %}
-            <span class="badge" style="background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); font-size:9px; white-space:nowrap;">{{ inv.status[:12] }}</span>
+            <span class="badge" style="background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); font-size:9px; white-space:nowrap;">{{ inv.status[:18] }}</span>
             {% else %}—{% endif %}
           </td>
-          <td style="font-size:11px; color:var(--text-secondary); white-space:nowrap;">{{ inv.thang_ke_khai or '—' }}</td>
-          <td style="max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.so_hop_dong or '' }}">
-            {{ inv.so_hop_dong or '—' }}
+          <td data-col="invoice_type" style="font-size:10px; color:var(--text-secondary); white-space:nowrap;">{{ inv.invoice_type or '—' }}</td>
+          <td data-col="payment_method" style="color:var(--text-secondary); white-space:nowrap;">{{ inv.payment_method or '—' }}</td>
+          {# ── Người bán ── #}
+          <td data-col="seller_name" style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.seller_name or '' }}">{{ inv.seller_name or '—' }}</td>
+          <td data-col="seller_tax_code" style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">{{ inv.seller_tax_code or '—' }}</td>
+          <td data-col="seller_phone" style="white-space:nowrap; color:var(--text-secondary);">{{ inv.seller_phone or '—' }}</td>
+          <td data-col="seller_email" style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.seller_email or '' }}">{{ inv.seller_email or '—' }}</td>
+          <td data-col="seller_bank" style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">{{ inv.seller_bank or '—' }}</td>
+          <td data-col="seller_bank_name" style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.seller_bank_name or '' }}">{{ inv.seller_bank_name or '—' }}</td>
+          {# ── Người mua ── #}
+          <td data-col="buyer_name" style="max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.buyer_name or '' }}">{{ inv.buyer_name or '—' }}</td>
+          <td data-col="buyer_tax_code" style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">{{ inv.buyer_tax_code or '—' }}</td>
+          {# ── Số tiền ── #}
+          <td data-col="amount" class="text-end" style="font-family:var(--font-mono); color:var(--text-secondary);">{{ "{:,.0f}".format(inv.amount) }}</td>
+          <td data-col="vat_rate" class="text-end" style="color:var(--text-secondary);">{{ inv.vat_rate or '—' }}</td>
+          <td data-col="vat_amount" class="text-end" style="font-family:var(--font-mono); color:var(--info);">{{ "{:,.0f}".format(inv.vat_amount) }}</td>
+          <td data-col="total_amount" class="text-end" style="font-family:var(--font-mono); font-weight:700; color:var(--brand);">{{ "{:,.0f}".format(inv.total_amount) }}</td>
+          {# ── Mặt hàng (XML ưu tiên, fallback mat_hang) ── #}
+          {% set _items = inv.get_line_items() %}
+          {% if _items %}
+            {% set _names = [] %}
+            {% for _it in _items %}{% if _it.ten_hhdvu %}{% set _ = _names.append(_it.ten_hhdvu) %}{% endif %}{% endfor %}
+            {% set _mat_hang_display = (_names | join('; ')) or inv.mat_hang or '' %}
+          {% else %}
+            {% set _mat_hang_display = inv.mat_hang or '' %}
+          {% endif %}
+          <td data-col="mat_hang" style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ _mat_hang_display }}">
+            {% if _mat_hang_display %}{{ _mat_hang_display }}{% else %}—{% endif %}
           </td>
-          <td style="font-size:11px; white-space:nowrap;">{{ inv.ngay_hop_dong or '—' }}</td>
-          <td style="max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.ma_cong_trinh or '' }}">
-            {{ inv.ma_cong_trinh or '—' }}
-          </td>
-          <td style="max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.payment_note or '' }}">
-            {{ inv.payment_note or '—' }}
-          </td>
-          <td style="max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.bank_name or '' }}">
-            {{ inv.bank_name or '—' }}
-          </td>
-          <td style="max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.hd_ban_ra_tuong_ung or '' }}">
-            {{ inv.hd_ban_ra_tuong_ung or '—' }}
-          </td>
-          <td style="max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.ghi_chu or '' }}">
+          {# ── Thông tin bổ sung ── #}
+          <td data-col="thang_ke_khai" style="font-size:11px; color:var(--text-secondary); white-space:nowrap;">{{ inv.thang_ke_khai or '—' }}</td>
+          <td data-col="ghi_chu" style="max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.ghi_chu or '' }}">
             {% if inv.ghi_chu %}
             <span class="badge" style="background:var(--brand-dim); color:var(--brand); border:1px solid var(--brand-border); font-size:10px;">{{ inv.ghi_chu }}</span>
             {% else %}—{% endif %}
           </td>
-          <td class="text-center" style="white-space:nowrap;">
-            <span title="{{ 'XML' if inv.has_xml else 'No XML' }}" style="color:{{ '#1a56db' if inv.has_xml else '#d1d5db' }}">
-              <i class="bi bi-filetype-xml"></i>
-            </span>
-            <span title="{{ 'PDF' if inv.has_pdf else 'No PDF' }}" style="color:{{ '#c81e1e' if inv.has_pdf else '#d1d5db' }}">
-              <i class="bi bi-filetype-pdf"></i>
-            </span>
-          </td>
-          <td class="d-flex gap-1" style="white-space:nowrap;">
+          <td data-col="ma_cong_trinh" style="max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.ma_cong_trinh or '' }}">{{ inv.ma_cong_trinh or '—' }}</td>
+          <td data-col="payment_note" style="max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.payment_note or '' }}">{{ inv.payment_note or '—' }}</td>
+          <td data-col="bank_name" style="max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.bank_name or '' }}">{{ inv.bank_name or '—' }}</td>
+          <td data-col="so_hop_dong" style="max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.so_hop_dong or '' }}">{{ inv.so_hop_dong or '—' }}</td>
+          <td data-col="ngay_hop_dong" style="white-space:nowrap; font-size:11px;">{{ inv.ngay_hop_dong or '—' }}</td>
+          <td data-col="hd_ban_ra_tuong_ung" style="max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.hd_ban_ra_tuong_ung or '' }}">{{ inv.hd_ban_ra_tuong_ung or '—' }}</td>
+          {# ── Actions ── #}
+          <td data-col="_actions" class="d-flex gap-1" style="white-space:nowrap;">
             <button class="btn btn-sm btn-outline-secondary" title="Chỉnh sửa thông tin bổ sung"
               data-invoice="{{ inv.to_dict() | tojson | forceescape }}"
               onclick="openEdit(this)">
@@ -223,7 +238,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="24" class="text-center py-5" style="color:var(--text-muted);">
+          <td colspan="29" class="text-center py-5" style="color:var(--text-muted);">
             <i class="bi bi-inbox" style="font-size:32px; display:block; margin-bottom:8px; opacity:.35;"></i>
             Không tìm thấy hóa đơn. Hãy bắt đầu crawl để tải hóa đơn.
           </td>
@@ -266,6 +281,129 @@
 
 {% block scripts %}
 <script>
+// ── Column definitions (key → label, group, default visible) ─────────────────
+const COL_DEFS = [
+  // Thông tin hóa đơn
+  { key: 'invoice_no',          label: 'Số hóa đơn',        group: 'Thông tin hóa đơn',  locked: true },
+  { key: 'invoice_symbol',      label: 'Ký hiệu',            group: 'Thông tin hóa đơn',  def: true  },
+  { key: 'invoice_form',        label: 'Mẫu số',             group: 'Thông tin hóa đơn',  def: false },
+  { key: 'issue_date',          label: 'Ngày lập',           group: 'Thông tin hóa đơn',  def: true  },
+  { key: 'status',              label: 'Trạng thái',         group: 'Thông tin hóa đơn',  def: true  },
+  { key: 'invoice_type',        label: 'Loại hóa đơn',       group: 'Thông tin hóa đơn',  def: false },
+  { key: 'payment_method',      label: 'Thanh toán',         group: 'Thông tin hóa đơn',  def: false },
+  // Người bán
+  { key: 'seller_name',         label: 'Tên người bán',      group: 'Người bán',           def: true  },
+  { key: 'seller_tax_code',     label: 'MST bán',            group: 'Người bán',           def: true  },
+  { key: 'seller_phone',        label: 'Điện thoại bán',     group: 'Người bán',           def: false },
+  { key: 'seller_email',        label: 'Email bán',          group: 'Người bán',           def: false },
+  { key: 'seller_bank',         label: 'Số TK bán',          group: 'Người bán',           def: false },
+  { key: 'seller_bank_name',    label: 'Ngân hàng bán',      group: 'Người bán',           def: false },
+  // Người mua
+  { key: 'buyer_name',          label: 'Tên người mua',      group: 'Người mua',           def: true  },
+  { key: 'buyer_tax_code',      label: 'MST mua',            group: 'Người mua',           def: true  },
+  // Số tiền
+  { key: 'amount',              label: 'Tiền hàng',          group: 'Số tiền',             def: true  },
+  { key: 'vat_rate',            label: 'Thuế suất',          group: 'Số tiền',             def: true  },
+  { key: 'vat_amount',          label: 'Thuế GTGT',          group: 'Số tiền',             def: true  },
+  { key: 'total_amount',        label: 'Tổng tiền',          group: 'Số tiền',             def: true  },
+  // Mặt hàng
+  { key: 'mat_hang',            label: 'Mặt hàng',           group: 'Mặt hàng',            def: true  },
+  // Thông tin bổ sung
+  { key: 'thang_ke_khai',       label: 'Tháng kê khai',      group: 'Thông tin bổ sung',   def: true  },
+  { key: 'ghi_chu',             label: 'Ghi chú / Loại',     group: 'Thông tin bổ sung',   def: true  },
+  { key: 'ma_cong_trinh',       label: 'Mã công trình',      group: 'Thông tin bổ sung',   def: false },
+  { key: 'payment_note',        label: 'Chứng từ TT',        group: 'Thông tin bổ sung',   def: false },
+  { key: 'bank_name',           label: 'NH thanh toán',      group: 'Thông tin bổ sung',   def: false },
+  { key: 'so_hop_dong',         label: 'Số hợp đồng',        group: 'Thông tin bổ sung',   def: false },
+  { key: 'ngay_hop_dong',       label: 'Ngày hợp đồng',      group: 'Thông tin bổ sung',   def: false },
+  { key: 'hd_ban_ra_tuong_ung', label: 'HĐ bán ra',          group: 'Thông tin bổ sung',   def: false },
+  // locked actions
+  { key: '_actions',            label: '',                   group: '',                    locked: true },
+];
+
+const LS_KEY = 'gdt_inv_cols_v1';
+
+function loadVisibleCols() {
+  try {
+    const saved = localStorage.getItem(LS_KEY);
+    if (saved) return new Set(JSON.parse(saved));
+  } catch(e) {}
+  // defaults
+  return new Set(COL_DEFS.filter(c => c.locked || c.def).map(c => c.key));
+}
+
+function saveVisibleCols(set) {
+  localStorage.setItem(LS_KEY, JSON.stringify([...set]));
+}
+
+let visibleCols = loadVisibleCols();
+
+function applyColVisibility() {
+  const table = document.getElementById('inv-table');
+  if (!table) return;
+  table.querySelectorAll('[data-col]').forEach(el => {
+    const key = el.dataset.col;
+    if (!key) return;
+    const def = COL_DEFS.find(c => c.key === key);
+    if (def && def.locked) return;
+    el.style.display = visibleCols.has(key) ? '' : 'none';
+  });
+}
+
+function buildColPicker() {
+  const menu = document.getElementById('col-picker-menu');
+  // Remove existing items (keep header div + divider)
+  const existingItems = menu.querySelectorAll('.col-pick-item, .col-pick-group');
+  existingItems.forEach(el => el.remove());
+
+  let lastGroup = null;
+  COL_DEFS.forEach(col => {
+    if (col.locked) return;
+    if (col.group !== lastGroup) {
+      const hdr = document.createElement('div');
+      hdr.className = 'col-pick-group px-2 py-1 mt-1';
+      hdr.style.cssText = 'font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em;';
+      hdr.textContent = col.group;
+      menu.appendChild(hdr);
+      lastGroup = col.group;
+    }
+    const item = document.createElement('label');
+    item.className = 'col-pick-item dropdown-item d-flex align-items-center gap-2 py-1 px-2';
+    item.style.cssText = 'cursor:pointer; border-radius:4px; font-size:12px;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = visibleCols.has(col.key);
+    cb.dataset.colKey = col.key;
+    cb.addEventListener('change', () => {
+      if (cb.checked) visibleCols.add(col.key);
+      else            visibleCols.delete(col.key);
+      saveVisibleCols(visibleCols);
+      applyColVisibility();
+    });
+    item.appendChild(cb);
+    item.appendChild(document.createTextNode(col.label));
+    menu.appendChild(item);
+  });
+}
+
+function colPickerAll(checked) {
+  COL_DEFS.forEach(col => {
+    if (col.locked) return;
+    if (checked) visibleCols.add(col.key);
+    else         visibleCols.delete(col.key);
+  });
+  saveVisibleCols(visibleCols);
+  buildColPicker();
+  applyColVisibility();
+}
+
+// Init on load
+document.addEventListener('DOMContentLoaded', () => {
+  buildColPicker();
+  applyColVisibility();
+});
+
+// ── Edit modal ───────────────────────────────────────────────────────────────
 function openEdit(btn) {
   try {
     const inv = JSON.parse(btn.dataset.invoice);
@@ -317,6 +455,7 @@ async function saveEdit() {
   }
 }
 
+// ── Excel export ─────────────────────────────────────────────────────────────
 async function exportExcel() {
   const btn      = document.getElementById('btn-export');
   const statusEl = document.getElementById('export-status');
@@ -367,20 +506,35 @@ async function exportExcel() {
   }
 }
 
-function normalizeDate(value) {
-  if (!value) return '';
-  const parts = value.split('/');
-  if (parts.length !== 3) return value;
-  let [d, m, y] = parts;
-  d = d.padStart(2, '0'); m = m.padStart(2, '0');
-  if (y.length === 2) y = '20' + y;
+// ── Date picker helpers ───────────────────────────────────────────────────────
+// Convert dd/mm/yyyy (backend format) → YYYY-MM-DD (HTML date input value)
+function dmyToIso(dmy) {
+  if (!dmy) return '';
+  const parts = dmy.split('/');
+  if (parts.length !== 3) return '';
+  const [d, m, y] = parts;
+  return `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+}
+
+// Convert YYYY-MM-DD → dd/mm/yyyy (what the backend expects)
+function isoToDmy(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
 }
-function attachDateFormatter(id) {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('blur', () => { el.value = normalizeDate(el.value.trim()); });
-}
-attachDateFormatter('filter-start');
-attachDateFormatter('filter-end');
+
+// On page load: populate date pickers from server-rendered dd/mm/yyyy values
+document.querySelectorAll('input[type="date"][data-dmy]').forEach(el => {
+  const iso = dmyToIso(el.dataset.dmy);
+  if (iso) el.value = iso;
+});
+
+// Intercept form submit: convert YYYY-MM-DD values back to dd/mm/yyyy for the backend
+document.getElementById('filter-form').addEventListener('submit', function(e) {
+  ['filter-start', 'filter-end'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.value) el.value = isoToDmy(el.value);
+  });
+});
 </script>
 {% endblock %}

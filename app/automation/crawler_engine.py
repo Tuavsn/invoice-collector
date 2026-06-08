@@ -57,9 +57,11 @@ class CrawlerEngine:
         emit_captcha_fn: Optional[Callable[[str], None]] = None,
         captcha_event: Optional[threading.Event] = None,
         get_captcha_answer: Optional[Callable[[], str]] = None,
+        account_id: Optional[int] = None,
         app=None,
     ) -> None:
         self.job_id             = job_id
+        self.account_id         = account_id
         self.username           = username
         self.password           = password
         self.start_date         = start_date
@@ -71,6 +73,10 @@ class CrawlerEngine:
         self.app                = app
         self._stop_requested    = False
         self._browser           = BrowserManager()
+        # ── Cumulative counters across all sub-tabs in this job
+        self._total_processed   = 0
+        self._total_failed      = 0
+        self._total_skipped     = 0
 
     # ─────────────────────────────────────────────────────────────── public
 
@@ -206,9 +212,9 @@ class CrawlerEngine:
     async def _iterate_all_pages(self, page: Page, sub_tab: SubTabConfig) -> None:
         """Duyệt qua toàn bộ trang kết quả của sub_tab hiện tại."""
         page_num        = 1
-        total_processed = 0
-        total_failed    = 0
-        total_skipped   = 0
+        sub_processed   = 0
+        sub_failed      = 0
+        sub_skipped     = 0
 
         while not self._stop_requested:
             self._emit(f"  📄 [{sub_tab.name}] Processing page {page_num}…")
@@ -234,17 +240,20 @@ class CrawlerEngine:
                     )
 
                 if result is SKIPPED:
-                    total_skipped += 1
+                    sub_skipped += 1
+                    self._total_skipped += 1
                 elif result:
                     await self._persist_invoice(result)
-                    total_processed += 1
+                    sub_processed += 1
+                    self._total_processed += 1
                 else:
-                    total_failed += 1
+                    sub_failed += 1
+                    self._total_failed += 1
 
                 self._update_job(
-                    total_invoices=total_processed + total_failed + total_skipped,
-                    downloaded_invoices=total_processed,
-                    failed_invoices=total_failed,
+                    total_invoices=self._total_processed + self._total_failed + self._total_skipped,
+                    downloaded_invoices=self._total_processed,
+                    failed_invoices=self._total_failed,
                 )
                 await asyncio.sleep(Config.CRAWLER_DELAY_MS / 1000)
 
@@ -256,23 +265,47 @@ class CrawlerEngine:
 
         self._emit(
             f"  [{sub_tab.name}] Done — "
-            f"processed={total_processed}, skipped={total_skipped}, failed={total_failed}"
+            f"processed={sub_processed}, skipped={sub_skipped}, failed={sub_failed}"
         )
 
     async def _go_to_next_page(self, page: Page) -> bool:
         try:
+            # Match the actual GDT portal next-page button:
+            # ant-btn-primary with a right-arrow SVG icon (data-icon="right")
             next_btn = page.locator(
                 "li.ant-pagination-next:not(.ant-pagination-disabled) a, "
-                "button.ant-pagination-item-link[aria-label='Next Page']:not([disabled])"
+                "li.ant-pagination-next:not(.ant-pagination-disabled) button, "
+                "button.ant-btn-primary i.anticon-right, "
+                "button.ant-btn[ant-click-animating-without-extra-node] i[aria-label='icon: right']"
             ).first
+
+            # Fallback: any enabled button containing anticon-right
             if await next_btn.count() == 0:
+                next_btn = page.locator(
+                    "button:not([disabled]) .anticon-right, "
+                    "button:not([disabled]) [data-icon='right']"
+                ).first
+
+            if await next_btn.count() == 0:
+                return False
+
+            # Click the parent button if we landed on the icon
+            elem = next_btn
+            tag = await elem.evaluate("el => el.tagName.toLowerCase()")
+            if tag != "button":
+                elem = page.locator(
+                    "button:not([disabled]):has(.anticon-right), "
+                    "button:not([disabled]):has([data-icon='right'])"
+                ).last
+
+            if await elem.count() == 0:
                 return False
 
             # Record current first-row text to detect page change
             first_row = page.locator("tbody.ant-table-tbody tr.ant-table-row").first
             before_text = await first_row.inner_text() if await first_row.count() > 0 else ""
 
-            await next_btn.click()
+            await elem.click()
 
             # Wait for table rows to change (indicates new page loaded)
             try:
@@ -400,6 +433,8 @@ class CrawlerEngine:
                     "has_xml":  result.get("has_xml",  False),
                     "has_html": result.get("has_html", False),
                     "has_pdf":  result.get("has_pdf",  False),
+                    # ── GDT metadata
+                    "account_id": self.account_id,
                 }
 
                 InvoiceRepository.upsert(db_data)

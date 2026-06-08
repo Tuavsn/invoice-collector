@@ -15,32 +15,43 @@ bp = Blueprint("invoices", __name__, url_prefix="/invoices")
 
 @bp.get("/")
 def index():
-    page           = request.args.get("page",          1,   type=int)
-    per_page       = request.args.get("per_page",      20,  type=int)
-    search         = request.args.get("search",        "").strip() or None
-    start_date     = request.args.get("start_date",    "").strip() or None
-    end_date       = request.args.get("end_date",      "").strip() or None
-    ghi_chu        = request.args.get("ghi_chu",       "").strip() or None
-    thang_ke_khai  = request.args.get("thang_ke_khai", "").strip() or None
+    # Không phân trang — hiện toàn bộ (giới hạn 2000 để tránh quá tải)
+    per_page       = 2000
+    search         = request.args.get("search",           "").strip() or None
+    start_date     = request.args.get("start_date",       "").strip() or None
+    end_date       = request.args.get("end_date",         "").strip() or None
+    ghi_chu        = request.args.get("ghi_chu",          "").strip() or None
+    thang_ke_khai  = request.args.get("thang_ke_khai",    "").strip() or None
+    invoice_category = request.args.get("invoice_category", "").strip() or None
+    account_id_str   = request.args.get("account_id",       "").strip() or None
+    account_id       = int(account_id_str) if account_id_str and account_id_str.isdigit() else None
+
+    from app.db.repository import GdtAccountRepository
+    accounts = GdtAccountRepository.get_all()
 
     pagination = InvoiceService.get_paginated(
-        page=page,
+        page=1,
         per_page=per_page,
         search=search,
         start_date=start_date,
         end_date=end_date,
         ghi_chu=ghi_chu,
         thang_ke_khai=thang_ke_khai,
+        invoice_category=invoice_category,
+        account_id=account_id,
     )
 
     return render_template(
         "invoices.html",
         pagination=pagination,
-        search=search             or "",
-        start_date=start_date     or "",
-        end_date=end_date         or "",
-        ghi_chu=ghi_chu           or "",
+        accounts=accounts,
+        search=search               or "",
+        start_date=start_date       or "",
+        end_date=end_date           or "",
+        ghi_chu=ghi_chu             or "",
         thang_ke_khai=thang_ke_khai or "",
+        invoice_category=invoice_category or "",
+        account_id=account_id_str or "",
     )
 
 

@@ -149,7 +149,7 @@ class XmlService:
         seller_website   = _text(nban, "Website")
 
         # ── Người mua (NMua) ─────────────────────────────────────────────────
-        buyer_name      = _text(nmua, "Ten")
+        buyer_name =    _text(nmua, "Ten")               or _text(nmua, "HVTNMHang")
         buyer_tax_code  = _text(nmua, "MST")
         buyer_address   = _text(nmua, "DChi")
         buyer_phone     = _text(nmua, "SDThoai")

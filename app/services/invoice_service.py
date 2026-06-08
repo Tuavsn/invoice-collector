@@ -20,6 +20,8 @@ class InvoiceService:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         invoice_type: Optional[str] = None,
+        invoice_category: Optional[str] = None,
+        account_id: Optional[int] = None,
         ghi_chu: Optional[str] = None,
         thang_ke_khai: Optional[str] = None,
     ):
@@ -33,6 +35,8 @@ class InvoiceService:
             start_date=start_dt,
             end_date=end_dt,
             invoice_type=invoice_type,
+            invoice_category=invoice_category,
+            account_id=account_id,
             ghi_chu=ghi_chu,
             thang_ke_khai=thang_ke_khai,
         )

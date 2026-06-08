@@ -12,6 +12,20 @@
 
   <!-- App CSS -->
   <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet" />
+  <style>
+    .nav-badge {
+      margin-left: auto;
+      background: var(--danger, #ef4444);
+      color: #fff;
+      border-radius: 99px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      min-width: 18px;
+      text-align: center;
+      line-height: 1.6;
+    }
+  </style>
 
   {% block head_extra %}{% endblock %}
 </head>
@@ -40,6 +54,13 @@
     <div class="nav-section-label">Data</div>
     <a href="{{ url_for('invoices.index') }}" class="{{ 'active' if request.blueprint == 'invoices' }}">
       <i class="bi bi-receipt-cutoff"></i> Invoices
+    </a>
+    <a href="{{ url_for('snapshot.index') }}" class="{{ 'active' if request.blueprint == 'snapshot' }}">
+      <i class="bi bi-flag-fill"></i> Hóa đơn mới
+      {# Badge đếm HĐ chưa chốt — lấy từ context hoặc bỏ qua nếu chưa có #}
+      {% if new_invoice_count is defined and new_invoice_count %}
+        <span class="nav-badge">{{ new_invoice_count }}</span>
+      {% endif %}
     </a>
 
     <div class="nav-section-label">System</div>

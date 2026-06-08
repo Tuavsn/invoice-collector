@@ -1,15 +1,55 @@
-# env file
-.env
-
-# venv
-venv/
-
-# logs
-logs/
-invoices/
-downloads/
-instance/
-exports/
-
 # Python cache
 __pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.*
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Runtime folders
+downloads/
+exports/
+invoices/
+instance/
+uploads/
+temp/
+tmp/
+
+# Local config
+auto_sync_config.json
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Test / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Playwright
+playwright-report/
+test-results/

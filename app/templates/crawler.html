@@ -17,14 +17,37 @@
       </div>
       <div class="card-body p-4">
 
-        {% if not has_creds %}
-        <div class="mb-3 p-3" style="background:var(--danger-bg); border:1px solid var(--danger-border); border-radius:var(--radius-md); font-size:12px; color:var(--danger);">
-          <i class="bi bi-exclamation-triangle me-1"></i>
-          <strong>GDT credentials not set.</strong> Add <code>GDT_USERNAME</code> and <code>GDT_PASSWORD</code> to your <code>.env</code> file, then restart.
+        <!-- Account Selector -->
+        {% if accounts %}
+        <div class="mb-3">
+          <label class="form-label" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-secondary);">
+            <i class="bi bi-person-badge"></i> Tài khoản crawl
+          </label>
+          <div id="account-list" style="display:flex; flex-direction:column; gap:6px;">
+            {% for acct in accounts %}
+            {% if acct.is_active %}
+            <label class="d-flex align-items-center gap-2 p-2"
+                   style="border:1px solid var(--border); border-radius:var(--radius-md); cursor:pointer; background:var(--surface-0); font-size:13px; transition:background .15s;"
+                   onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='var(--surface-0)'">
+              <input type="checkbox" class="acct-chk" value="{{ acct.id }}" checked
+                     style="width:15px; height:15px; cursor:pointer;" onchange="updateStartBtn()">
+              <span class="fw-600">{{ acct.name }}</span>
+              <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); margin-left:auto;">{{ acct.username }}</span>
+            </label>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% if accounts | selectattr('is_active') | list | length > 1 %}
+          <div class="mt-1" style="font-size:11px; color:var(--text-muted);">
+            <a href="#" onclick="toggleAllAccounts(true); return false;">Chọn tất cả</a> ·
+            <a href="#" onclick="toggleAllAccounts(false); return false;">Bỏ chọn</a>
+          </div>
+          {% endif %}
         </div>
         {% else %}
-        <div class="mb-3 p-2" style="background:var(--success-bg); border:1px solid var(--success-border); border-radius:var(--radius-md); font-size:12px; color:var(--success);">
-          <i class="bi bi-check-circle me-1"></i> GDT credentials loaded from environment.
+        <div class="mb-3 p-3" style="background:var(--warning-bg); border:1px solid var(--warning-border); border-radius:var(--radius-md); font-size:12px; color:var(--warning);">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Chưa có tài khoản nào. <a href="/settings/">Thêm tài khoản GDT</a> để bắt đầu crawl.
         </div>
         {% endif %}
 
@@ -96,13 +119,56 @@
             <div id="autosync-range" style="font-family:var(--font-mono); color:var(--brand); margin-bottom:6px;"></div>
             <div id="autosync-chunk-preview" style="color:var(--text-muted);"></div>
           </div>
+
+          <!-- ── Giờ chạy tự động ── -->
+          <div class="mb-3">
+            <label class="form-label" style="font-size:12px;">🕖 Giờ chạy hàng ngày</label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="time" id="inp-run-time" class="form-control form-control-sm"
+                     value="19:00" style="width:150px; font-family:var(--font-mono);" />
+              <span style="font-size:11px; color:var(--text-muted);">giờ Việt Nam (ICT)</span>
+            </div>
+          </div>
+
+          <!-- ── Active auto-sync status banner (shown when enabled) ── -->
+          <div id="autosync-status-card" style="display:none; margin-bottom:12px; padding:12px 14px; border-radius:var(--radius-md); border:1px solid var(--success-border); background:var(--success-bg); font-size:12px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--success);animation:pulse 1.2s infinite;flex-shrink:0;"></span>
+              <strong style="color:var(--success); font-size:13px;">Auto-Sync đang hoạt động</strong>
+            </div>
+            <div style="color:var(--text-secondary); line-height:1.8;">
+              <div>📦 Chế độ: <strong id="asc-preset" style="color:var(--brand);font-family:var(--font-mono);">—</strong></div>
+              <div>🕖 Chạy hàng ngày lúc: <strong id="asc-run-time" style="font-family:var(--font-mono);">—</strong></div>
+              <div>⏳ Lần chạy tiếp theo: <strong id="asc-next-run" style="font-family:var(--font-mono);">—</strong></div>
+              <div>🕐 Kích hoạt lúc: <strong id="asc-activated-at" style="font-family:var(--font-mono);">—</strong></div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger mt-2" onclick="cancelAutoSync()" style="font-size:11px;">
+              <i class="bi bi-x-circle"></i> Hủy Auto-Sync
+            </button>
+          </div>
         </div>
 
-        <div class="d-flex gap-2 mt-2">
-          <button id="btn-start" class="btn btn-brand flex-grow-1" onclick="startCrawl()" {{ 'disabled' if not has_creds }}>
+        <!-- Buttons for Range mode -->
+        <div id="btn-group-range" class="d-flex gap-2 mt-2">
+          <button id="btn-start" class="btn btn-brand flex-grow-1" onclick="startCrawl()" disabled>
             <i class="bi bi-play-fill"></i> Start Crawl
           </button>
           <button id="btn-stop" class="btn btn-outline-danger" onclick="stopCrawl()" disabled>
+            <i class="bi bi-stop-fill"></i> Stop
+          </button>
+        </div>
+
+        <!-- Buttons for Auto Sync mode -->
+        <div id="btn-group-autosync" class="gap-2 mt-2" style="display:none;">
+          <button id="btn-sync-now" class="btn btn-outline-brand flex-grow-1" onclick="syncNow()" disabled
+                  title="Chạy sync ngay lập tức, không lên lịch hàng ngày">
+            <i class="bi bi-lightning-fill"></i> Sync Ngay
+          </button>
+          <button id="btn-enable-autosync" class="btn btn-brand flex-grow-1" onclick="startCrawl()" disabled
+                  title="Lên lịch sync tự động hàng ngày và chạy ngay lần đầu">
+            <i class="bi bi-arrow-repeat"></i> Kích hoạt Auto Sync
+          </button>
+          <button id="btn-stop-auto" class="btn btn-outline-danger" onclick="stopCrawl()" disabled>
             <i class="bi bi-stop-fill"></i> Stop
           </button>
         </div>
@@ -143,26 +209,8 @@
 
   <!-- ── Log Terminal ───────────────────────── -->
   <div class="col-md-7">
-    <!-- Captcha Widget -->
-    <div id="captcha-widget" style="display:none; margin-bottom:12px;">
-      <div style="font-size:12px; color:var(--warning); margin-bottom:8px; font-weight:600;">
-        🖼 Nhập mã captcha bên dưới:
-      </div>
-      <img id="captcha-img" src="" alt="captcha"
-          style="display:block; border-radius:6px; margin-bottom:10px; image-rendering:pixelated; height:48px; border:1px solid var(--border);" />
-      <div class="d-flex gap-2">
-        <input id="captcha-input" type="text" class="form-control form-control-sm"
-              placeholder="Nhập mã…" maxlength="10"
-              style="font-family:var(--font-mono); letter-spacing:3px; text-transform:uppercase; width:160px;"
-              onkeydown="if(event.key==='Enter') submitCaptcha()" />
-        <button class="btn btn-sm btn-brand" onclick="submitCaptcha()">
-          <i class="bi bi-check-lg"></i> Xác nhận
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" onclick="refreshCaptcha()">
-          <i class="bi bi-arrow-clockwise"></i>
-        </button>
-      </div>
-    </div>
+    <!-- Captcha Widgets (one per account, injected dynamically) -->
+    <div id="captcha-container" style="margin-bottom:8px;"></div>
 
     <div class="card h-100">
       <div class="card-header">
@@ -187,7 +235,7 @@
         <table class="table mb-0">
           <thead>
             <tr>
-              <th>ID</th><th>Date Range</th><th>Status</th>
+              <th>ID</th><th>Tài khoản</th><th>Date Range</th><th>Status</th>
               <th>Downloaded</th><th>Failed</th><th>Started</th>
             </tr>
           </thead>
@@ -195,6 +243,11 @@
             {% for job in recent_jobs %}
             <tr>
               <td><code>#{{ job.id }}</code></td>
+              <td style="font-size:12px;">
+                {% if job.account_name %}
+                  <span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">{{ job.account_name }}</span>
+                {% else %}—{% endif %}
+              </td>
               <td>{{ job.start_date }} → {{ job.end_date }}</td>
               <td><span class="badge badge-status badge-status-{{ job.status }}">{{ job.status | upper }}</span></td>
               <td>{{ job.downloaded_invoices }}</td>
@@ -204,7 +257,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="text-center py-4" style="color:var(--text-muted);">No jobs yet.</td></tr>
+            <tr><td colspan="7" class="text-center py-4" style="color:var(--text-muted);">No jobs yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -220,15 +273,36 @@
 let currentJobId    = null;
 let isRunning       = {{ 'true' if status.is_running else 'false' }};
 let isAutoSync      = {{ 'true' if auto_sync_active else 'false' }};
+const autoSyncCfg   = {{ auto_sync_config | tojson if auto_sync_config else '{}' }};
 let currentMode     = 'range';
 
 const logEl         = document.getElementById('log-terminal');
 const btnStart      = document.getElementById('btn-start');
 const btnStop       = document.getElementById('btn-stop');
 const progCard      = document.getElementById('progress-card');
-const captchaWidget = document.getElementById('captcha-widget');
-const captchaImg    = document.getElementById('captcha-img');
-const captchaInput  = document.getElementById('captcha-input');
+// captcha widgets managed dynamically — see captchaWidgets dict
+
+// ── Account selection ──────────────────────────────────────────────────────────
+function getSelectedAccountIds() {
+  return [...document.querySelectorAll('.acct-chk:checked')].map(c => parseInt(c.value));
+}
+
+function updateStartBtn() {
+  const has = getSelectedAccountIds().length > 0;
+  if (btnStart) btnStart.disabled = !has || isRunning;
+  const s = document.getElementById('btn-sync-now');
+  const a = document.getElementById('btn-enable-autosync');
+  if (s) s.disabled = !has || isRunning;
+  if (a) a.disabled = !has;
+}
+
+function toggleAllAccounts(checked) {
+  document.querySelectorAll('.acct-chk').forEach(c => c.checked = checked);
+  updateStartBtn();
+}
+
+// Init
+updateStartBtn();
 
 // ── Mode switching ────────────────────────────────────────────────────────────
 function switchMode(mode) {
@@ -238,9 +312,16 @@ function switchMode(mode) {
   document.getElementById('tab-range').className      = 'btn btn-sm flex-grow-1 tab-btn ' + (mode === 'range'     ? 'btn-brand' : 'btn-outline-secondary');
   document.getElementById('tab-autosync').className   = 'btn btn-sm flex-grow-1 tab-btn ' + (mode === 'auto_sync' ? 'btn-brand' : 'btn-outline-secondary');
 
+  // Toggle button groups
+  const grpRange     = document.getElementById('btn-group-range');
+  const grpAutosync  = document.getElementById('btn-group-autosync');
   if (mode === 'auto_sync') {
+    grpRange.style.setProperty('display', 'none', 'important');
+    grpAutosync.style.setProperty('display', 'flex', 'important');
     previewAutoSyncChunks();
   } else {
+    grpRange.style.setProperty('display', 'flex', 'important');
+    grpAutosync.style.setProperty('display', 'none', 'important');
     previewChunks();
   }
 }
@@ -339,34 +420,105 @@ async function previewChunks() {
 }
 
 // ── Captcha ───────────────────────────────────────────────────────────────────
-socket.on('crawler_captcha', (data) => {
-  captchaImg.src = 'data:image/png;base64,' + data.image;
-  captchaInput.value = '';
-  captchaWidget.style.display = 'block';
-  setTimeout(() => captchaInput.focus(), 100);
-  appendLog('🖼 Vui lòng nhập mã captcha trong ô bên dưới…', 'warn');
-});
-socket.on('crawler_done', () => { captchaWidget.style.display = 'none'; });
+// ── Multi-account captcha ─────────────────────────────────────────────────────
+// Map: account_id (string key, "null" for legacy) → widget DOM element
+const captchaWidgets = {};
 
-async function submitCaptcha() {
-  const text = captchaInput.value.trim().toUpperCase();
-  if (!text) { captchaInput.focus(); return; }
-  captchaWidget.style.display = 'none';
-  appendLog(`⌨ Captcha submitted: ${text}`, 'info');
+function _captchaKey(account_id) {
+  return account_id == null ? 'null' : String(account_id);
+}
+
+function _ensureCaptchaWidget(account_id, account_name) {
+  const key = _captchaKey(account_id);
+  if (captchaWidgets[key]) return captchaWidgets[key];
+
+  const label = account_name ? `🖼 Captcha — <strong>${account_name}</strong>` : '🖼 Nhập mã captcha:';
+  const div   = document.createElement('div');
+  div.id        = `captcha-widget-${key}`;
+  div.className = 'captcha-widget';
+  div.style.cssText = 'display:none; margin-bottom:10px; padding:12px 14px; background:var(--warning-bg,#fffbeb); border:1px solid var(--warning-border,#fde68a); border-radius:8px;';
+  div.innerHTML = `
+    <div style="font-size:12px; color:var(--warning); margin-bottom:8px; font-weight:600;">${label}</div>
+    <img class="captcha-img" src="" alt="captcha"
+        style="display:block; border-radius:6px; margin-bottom:10px; image-rendering:pixelated; height:48px; border:1px solid var(--border);" />
+    <div class="d-flex gap-2">
+      <input class="captcha-input form-control form-control-sm" type="text"
+            placeholder="Nhập mã…" maxlength="10"
+            style="font-family:var(--font-mono); letter-spacing:3px; text-transform:uppercase; width:160px;" />
+      <button class="btn btn-sm btn-brand" onclick="submitCaptcha('${key}')">
+        <i class="bi bi-check-lg"></i> Xác nhận
+      </button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="refreshCaptcha('${key}')">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>`;
+
+  // Enter key on input
+  div.querySelector('.captcha-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitCaptcha(key);
+  });
+
+  document.getElementById('captcha-container').appendChild(div);
+  captchaWidgets[key] = div;
+  return div;
+}
+
+socket.on('crawler_captcha', (data) => {
+  const key    = _captchaKey(data.account_id);
+  const widget = _ensureCaptchaWidget(data.account_id, data.account_name || '');
+  widget.querySelector('.captcha-img').src = 'data:image/png;base64,' + data.image;
+  widget.querySelector('.captcha-input').value = '';
+  widget.style.display = 'block';
+  setTimeout(() => widget.querySelector('.captcha-input').focus(), 100);
+  appendLog(`🖼 Captcha${data.account_name ? ' (' + data.account_name + ')' : ''} — vui lòng nhập mã…`, 'warn');
+});
+
+socket.on('crawler_done', (data) => {
+  // Hide captcha for this account (or all if no account_id)
+  if (data && data.account_id != null) {
+    const w = captchaWidgets[_captchaKey(data.account_id)];
+    if (w) w.style.display = 'none';
+  } else {
+    Object.values(captchaWidgets).forEach(w => w.style.display = 'none');
+  }
+});
+
+socket.on('crawler_captcha_refresh', (data) => {
+  const key = _captchaKey(data && data.account_id);
+  const w   = captchaWidgets[key];
+  if (w) w.querySelector('.captcha-input').value = '';
+});
+
+async function submitCaptcha(key) {
+  key = key || 'null';
+  const widget = captchaWidgets[key];
+  if (!widget) return;
+  const text = widget.querySelector('.captcha-input').value.trim().toUpperCase();
+  if (!text) { widget.querySelector('.captcha-input').focus(); return; }
+  widget.style.display = 'none';
+  const account_id = key === 'null' ? null : parseInt(key);
   try {
     await fetch('/crawler/api/captcha', {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answer: text }),
+      body:    JSON.stringify({ answer: text, account_id }),
     });
-  } catch (e) { appendLog(`❌ Captcha submit lỗi: ${e}`, 'error'); }
+  } catch(e) { appendLog('❌ Lỗi gửi captcha: ' + e, 'error'); }
 }
 
-async function refreshCaptcha() {
+async function refreshCaptcha(key) {
+  key = key || 'null';
+  const account_id = key === 'null' ? null : parseInt(key);
   appendLog('🔄 Đang yêu cầu làm mới captcha…', 'info');
-  try { await fetch('/crawler/api/captcha/refresh', { method: 'POST' }); }
-  catch (e) { appendLog(`❌ Refresh thất bại: ${e}`, 'error'); }
+  try {
+    await fetch('/crawler/api/captcha/refresh', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ account_id }),
+    });
+  } catch(e) { appendLog('❌ Lỗi refresh captcha: ' + e, 'error'); }
 }
+
 
 // ── Log helpers ───────────────────────────────────────────────────────────────
 function appendLog(msg, level = 'info') {
@@ -382,22 +534,85 @@ function clearLogs() {
 }
 
 // ── UI state ──────────────────────────────────────────────────────────────────
-function setAutoSync(active) {
+function setAutoSync(active, cfg) {
   isAutoSync = active;
+  const isScheduled = !active && cfg && cfg.enabled;  // lên lịch nhưng chưa chạy
+  const isEnabled   = active || isScheduled;
+
   const badge = document.getElementById('auto-sync-badge');
   if (badge) badge.style.display = active ? 'inline-flex' : 'none';
-  // While auto-sync is running, disable the auto-sync start tab button
-  document.getElementById('tab-autosync').disabled = active;
-  if (active) {
-    // Switch UI to auto_sync tab so user sees the state
+
+  // Status card — hiển thị cả khi đang chạy lẫn khi đã lên lịch
+  const card = document.getElementById('autosync-status-card');
+  if (card) card.style.display = isEnabled ? 'block' : 'none';
+
+  if (isEnabled && cfg) {
+    const presetLabels = { '2m':'2 tháng','6m':'6 tháng','1y':'1 năm','custom_date':'Tùy chỉnh' };
+    const presetEl = document.getElementById('asc-preset');
+    if (presetEl) presetEl.textContent = presetLabels[cfg.preset] || cfg.preset;
+
+    const activatedEl = document.getElementById('asc-activated-at');
+    if (activatedEl && cfg.activated_at) {
+      activatedEl.textContent = cfg.activated_at.replace('T', ' ');
+    }
+
+    // Show configured run time
+    const runHour   = cfg.run_hour   ?? 19;
+    const runMinute = cfg.run_minute ?? 0;
+    const pad = n => String(n).padStart(2, '0');
+    const runTimeStr = `${pad(runHour)}:${pad(runMinute)}`;
+
+    const runTimeEl = document.getElementById('asc-run-time');
+    if (runTimeEl) runTimeEl.textContent = runTimeStr;
+
+    // Sync the time picker to match saved config
+    const timePicker = document.getElementById('inp-run-time');
+    if (timePicker) timePicker.value = runTimeStr;
+
+    // Compute next scheduled run
+    const nextRunEl = document.getElementById('asc-next-run');
+    if (nextRunEl) {
+      const now  = new Date();
+      const next = new Date(now);
+      next.setHours(runHour, runMinute, 0, 0);
+      if (now >= next) next.setDate(next.getDate() + 1);
+      nextRunEl.textContent = `${next.getDate()}/${pad(next.getMonth()+1)}/${next.getFullYear()} ${runTimeStr}`;
+    }
+
+    // Lock controls while scheduled or running
+    document.querySelectorAll('.autosync-preset').forEach(b => b.disabled = true);
+    const tp = document.getElementById('inp-run-time');
+    if (tp) tp.disabled = true;
+    const btnEnable = document.getElementById('btn-enable-autosync');
+    if (btnEnable) {
+      btnEnable.disabled = true;
+      btnEnable.innerHTML = active
+        ? '<i class="bi bi-arrow-repeat"></i> Đang chạy…'
+        : '<i class="bi bi-check-circle-fill"></i> Đã lên lịch';
+    }
+    const btnSyncNow = document.getElementById('btn-sync-now');
+    if (btnSyncNow) btnSyncNow.disabled = isRunning;
+  } else {
+    document.querySelectorAll('.autosync-preset').forEach(b => b.disabled = false);
+    const tp = document.getElementById('inp-run-time');
+    if (tp) tp.disabled = false;
+    const btnEnable = document.getElementById('btn-enable-autosync');
+    if (btnEnable) { btnEnable.disabled = false; btnEnable.innerHTML = '<i class="bi bi-arrow-repeat"></i> Kích hoạt Auto Sync'; }
+  }
+
+  // While auto-sync is enabled/scheduled, lock the tab switch but keep panel visible
+  document.getElementById('tab-autosync').disabled = isEnabled;
+  if (isEnabled) {
     switchMode('auto_sync');
   }
 }
 
 function setRunning(running) {
-  isRunning       = running;
-  btnStart.disabled = running;
-  btnStop.disabled  = !running;
+  isRunning = running;
+  btnStop.disabled = !running;
+  const btnStopAuto = document.getElementById('btn-stop-auto');
+  if (btnStopAuto) btnStopAuto.disabled = !running;
+  updateStartBtn();
   progCard.style.display = running ? 'block' : 'none';
   const dot = document.getElementById('status-dot');
   const txt = document.getElementById('status-text');
@@ -407,9 +622,73 @@ function setRunning(running) {
   }
 }
 
+// ── Sync Ngay (chạy ngay, không lên lịch) ────────────────────────────────────
+async function syncNow() {
+  const accountIds = getSelectedAccountIds();
+  if (accountIds.length === 0) {
+    appendLog('❌ Vui lòng chọn ít nhất một tài khoản.', 'error'); return;
+  }
+  let body = { account_ids: accountIds };
+
+  if (currentPreset === 'custom_date') {
+    const sd = document.getElementById('autosync-start-date').value;
+    const ed = document.getElementById('autosync-end-date').value;
+    if (!sd || !ed) {
+      appendLog('❌ Vui lòng chọn ngày tùy chỉnh.', 'error'); return;
+    }
+    body.mode       = 'range';
+    body.start_date = sd;
+    body.end_date   = ed;
+    const [sy, sm] = sd.split('-');
+    const [ey, em] = ed.split('-');
+    body.start_month = parseInt(sm); body.start_year = parseInt(sy);
+    body.end_month   = parseInt(em); body.end_year   = parseInt(ey);
+  } else {
+    // Preset: tính date range tương ứng rồi gửi dưới dạng "range" thông thường
+    const monthsMap = { '2m': 2, '6m': 6, '1y': 12 };
+    const months = monthsMap[currentPreset] || 2;
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth() - months, 1);
+    const toIsoStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const sd = toIsoStr(start);
+    const ed = toIsoStr(today);
+    body.mode = 'range';
+    body.start_date = sd;
+    body.end_date   = ed;
+    const [sy, sm] = sd.split('-');
+    const [ey, em] = ed.split('-');
+    body.start_month = parseInt(sm); body.start_year = parseInt(sy);
+    body.end_month   = parseInt(em); body.end_year   = parseInt(ey);
+  }
+
+  const presetLabel = { '2m':'2 tháng','6m':'6 tháng','1y':'1 năm','custom_date':'Tùy chỉnh' }[currentPreset] || currentPreset;
+  appendLog(`⚡ Sync ngay — phạm vi: ${presetLabel}…`, 'info');
+
+  try {
+    const res  = await fetch('/crawler/api/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const n = data.total_chunks || data.chunks?.length || 1;
+      appendLog(`✓ Đã xếp hàng ${n} chunk. Chạy ngay (không lên lịch tự động).`, 'success');
+      setRunning(true);
+    } else {
+      appendLog(`❌ ${data.error}`, 'error');
+    }
+  } catch (e) { appendLog(`❌ Request thất bại: ${e}`, 'error'); }
+}
+
 // ── Start / Stop ──────────────────────────────────────────────────────────────
 async function startCrawl() {
-  let body = { mode: currentMode };
+  const accountIds = getSelectedAccountIds();
+  if (accountIds.length === 0) {
+    appendLog('❌ Vui lòng chọn ít nhất một tài khoản.', 'error'); return;
+  }
+
+  let body = { mode: currentMode, account_ids: accountIds };
 
   if (currentMode === 'range') {
     const sd = document.getElementById('inp-start-date').value;
@@ -439,6 +718,17 @@ async function startCrawl() {
     } else {
       body.mode = currentPreset;  // '2m' | '6m' | '1y'
     }
+
+    // Gửi giờ chạy tự động
+    const timePicker = document.getElementById('inp-run-time');
+    if (timePicker && timePicker.value) {
+      const [h, m] = timePicker.value.split(':').map(Number);
+      body.run_hour   = h;
+      body.run_minute = m;
+    } else {
+      body.run_hour   = 19;
+      body.run_minute = 0;
+    }
   }
 
   const modeLabel = {
@@ -458,9 +748,15 @@ async function startCrawl() {
     });
     const data = await res.json();
     if (data.ok) {
-      const n = data.total_chunks || data.chunks?.length || 1;
-      appendLog(`✓ Đã xếp hàng ${n} chunk. Các job sẽ chạy tuần tự.`, 'success');
-      setRunning(true);
+      if (data.scheduled_only) {
+        // Auto-sync: chỉ lên lịch, không chạy ngay
+        appendLog(`🕐 ${data.message || 'Auto-sync đã được lên lịch.'}`, 'success');
+        // Không setRunning — job chưa chạy
+      } else {
+        const n = data.total_chunks || data.chunks?.length || 1;
+        appendLog(`✓ Đã xếp hàng ${n} chunk. Các job sẽ chạy tuần tự.`, 'success');
+        setRunning(true);
+      }
     } else {
       appendLog(`❌ ${data.error}`, 'error');
     }
@@ -473,6 +769,20 @@ async function stopCrawl() {
   const data = await res.json();
   appendLog(data.message, data.ok ? 'warn' : 'error');
   if (data.ok) setRunning(false);
+}
+
+async function cancelAutoSync() {
+  if (!confirm('Bạn có chắc muốn hủy Auto-Sync? Lịch chạy hàng ngày sẽ bị xóa.')) return;
+  try {
+    const res  = await fetch('/crawler/api/auto-sync/disable', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      setAutoSync(false, null);
+      appendLog('🔕 Auto-sync đã được hủy.', 'warn');
+    } else {
+      appendLog(`❌ ${data.error}`, 'error');
+    }
+  } catch (e) { appendLog(`❌ Lỗi: ${e}`, 'error'); }
 }
 
 // ── Socket events ─────────────────────────────────────────────────────────────
@@ -502,9 +812,15 @@ socket.on('crawler_progress', (data) => {
 });
 
 socket.on('auto_sync_state', (data) => {
-  setAutoSync(data.active);
-  if (!data.active) {
-    appendLog('🔄 Auto-sync stopped.', 'warn');
+  setAutoSync(data.active, data.config || null);
+  if (!data.active && data.config && data.config.enabled) {
+    // Scheduler đã lên lịch nhưng chưa chạy (active=false, enabled=true)
+    const pad = n => String(n).padStart(2, '0');
+    const h = data.config.run_hour ?? 19;
+    const m = data.config.run_minute ?? 0;
+    appendLog(`📅 Auto-sync đã lên lịch — sẽ chạy lúc ${pad(h)}:${pad(m)} ICT.`, 'info');
+  } else if (!data.active && (!data.config || !data.config.enabled)) {
+    appendLog('🔕 Auto-sync đã tắt.', 'warn');
   }
 });
 
@@ -519,7 +835,7 @@ setInterval(async () => {
     const res  = await fetch('/crawler/api/status');
     const data = await res.json();
     setRunning(data.is_running);
-    setAutoSync(!!data.auto_sync_active);
+    setAutoSync(!!data.auto_sync_active, data.auto_sync_config || null);
     if (data.running_job) {
       const j = data.running_job;
       document.getElementById('stat-total').textContent = j.total_invoices;
@@ -530,7 +846,8 @@ setInterval(async () => {
 }, 5000);
 
 if (isRunning)   setRunning(true);
-if (isAutoSync)  setAutoSync(true);
+// Khởi tạo: truyền config dù active hay chỉ scheduled
+setAutoSync(isAutoSync, autoSyncCfg && Object.keys(autoSyncCfg).length ? autoSyncCfg : null);
 
 // Init — set default date range to current month for the range picker
 (function initDatePickers() {

@@ -12,18 +12,104 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Float,
+    ForeignKey,
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
 
 
+class GdtAccount(db.Model):  # type: ignore[name-defined]
+    """
+    Một tài khoản GDT dùng để crawl hóa đơn.
+    Mỗi hóa đơn crawl được sẽ gắn account_id để biết thuộc account nào.
+    Thông tin công ty (company_*) dùng cho header file Excel xuất.
+    """
+    __tablename__ = "gdt_accounts"
+
+    id:         Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name:       Mapped[str]           = mapped_column(String(200), nullable=False)
+    username:   Mapped[str]           = mapped_column(String(200), nullable=False, unique=True)
+    password:   Mapped[str]           = mapped_column(String(500), nullable=False)
+    tax_code:   Mapped[Optional[str]] = mapped_column(String(50))
+    note:       Mapped[Optional[str]] = mapped_column(String(500))
+    is_active:  Mapped[bool]          = mapped_column(Boolean, default=True)
+
+    # ── Thông tin công ty cho header Excel ───────────────────────────────────
+    company_name:         Mapped[Optional[str]] = mapped_column(String(500))
+    company_tax_code:     Mapped[Optional[str]] = mapped_column(String(50))
+    company_address:      Mapped[Optional[str]] = mapped_column(String(1000))
+    company_report_title: Mapped[Optional[str]] = mapped_column(String(500))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    invoices:   Mapped[List["Invoice"]]  = relationship("Invoice",  back_populates="account", lazy="dynamic")
+    crawl_jobs: Mapped[List["CrawlJob"]] = relationship("CrawlJob", back_populates="account", lazy="dynamic")
+
+    def to_dict(self) -> dict:
+        return {
+            "id":                   self.id,
+            "name":                 self.name,
+            "username":             self.username,
+            "tax_code":             self.tax_code,
+            "note":                 self.note,
+            "is_active":            self.is_active,
+            "company_name":         self.company_name,
+            "company_tax_code":     self.company_tax_code,
+            "company_address":      self.company_address,
+            "company_report_title": self.company_report_title,
+            "created_at":           self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class SnapshotBatch(db.Model):  # type: ignore[name-defined]
+    """
+    Một lần chốt hóa đơn. Mỗi batch ghi lại thời điểm và nhãn người dùng đặt.
+    Invoice.snapshot_batch_id = NULL  → hóa đơn mới, chưa chốt.
+    Invoice.snapshot_batch_id = id    → đã chốt vào batch này.
+    """
+    __tablename__ = "snapshot_batches"
+
+    id:            Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    label:         Mapped[str]           = mapped_column(String(200), nullable=False)
+    note:          Mapped[Optional[str]] = mapped_column(String(500))
+    invoice_count: Mapped[int]           = mapped_column(Integer, default=0)
+    account_id:    Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("gdt_accounts.id"), nullable=True, index=True)
+    created_at:    Mapped[datetime]      = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+    invoices: Mapped[List["Invoice"]] = relationship(
+        "Invoice", back_populates="snapshot_batch", lazy="dynamic"
+    )
+    account: Mapped[Optional["GdtAccount"]] = relationship("GdtAccount")
+
+    def to_dict(self) -> dict:
+        return {
+            "id":            self.id,
+            "label":         self.label,
+            "note":          self.note,
+            "invoice_count": self.invoice_count,
+            "account_id":    self.account_id,
+            "account_name":  self.account.name if self.account else None,
+            "created_at":    self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class Invoice(db.Model):  # type: ignore[name-defined]
     __tablename__ = "invoices"
+    __table_args__ = (
+        UniqueConstraint(
+            "invoice_no", "invoice_symbol", "invoice_form", "invoice_category",
+            name="uq_invoice_no_symbol_form_category",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -124,6 +210,24 @@ class Invoice(db.Model):  # type: ignore[name-defined]
     has_xml:  Mapped[bool] = mapped_column(Boolean, default=False)
     has_html: Mapped[bool] = mapped_column(Boolean, default=False)
     has_pdf:  Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # ── Account (tài khoản GDT crawl HĐ này) ────────────────────────────────
+    account_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("gdt_accounts.id"), nullable=True, index=True
+    )
+    account: Mapped[Optional["GdtAccount"]] = relationship(
+        "GdtAccount", back_populates="invoices"
+    )
+
+    # ── Snapshot batch ────────────────────────────────────────────────────────
+    # NULL  = hóa đơn mới, chưa chốt
+    # int   = đã chốt, thuộc batch này
+    snapshot_batch_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("snapshot_batches.id"), nullable=True, index=True
+    )
+    snapshot_batch: Mapped[Optional["SnapshotBatch"]] = relationship(
+        "SnapshotBatch", back_populates="invoices"
+    )
 
     # ── Misc
     raw_data:   Mapped[Optional[str]] = mapped_column(Text)
@@ -236,6 +340,11 @@ class Invoice(db.Model):  # type: ignore[name-defined]
             # Timestamps
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            # Snapshot
+            "snapshot_batch_id": self.snapshot_batch_id,
+            # Account
+            "account_id":   self.account_id,
+            "account_name": self.account.name if self.account else None,
         }
 
 
@@ -243,6 +352,7 @@ class CrawlJob(db.Model):  # type: ignore[name-defined]
     __tablename__ = "crawl_jobs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id:          Mapped[Optional[int]]      = mapped_column(Integer, ForeignKey("gdt_accounts.id"), nullable=True, index=True)
     start_date:          Mapped[Optional[str]]      = mapped_column(String(20))
     end_date:            Mapped[Optional[str]]      = mapped_column(String(20))
     start_time:          Mapped[Optional[datetime]] = mapped_column(DateTime)
@@ -257,9 +367,13 @@ class CrawlJob(db.Model):  # type: ignore[name-defined]
         DateTime, server_default=func.now(), nullable=False
     )
 
+    account: Mapped[Optional["GdtAccount"]] = relationship("GdtAccount", back_populates="crawl_jobs")
+
     def to_dict(self) -> dict:
         return {
             "id":                  self.id,
+            "account_id":          self.account_id,
+            "account_name":        self.account.name if self.account else None,
             "start_date":          self.start_date,
             "end_date":            self.end_date,
             "start_time":          self.start_time.isoformat() if self.start_time else None,

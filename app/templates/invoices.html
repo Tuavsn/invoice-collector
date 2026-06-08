@@ -6,37 +6,84 @@
 <!-- ── Filters ────────────────────────────────────────── -->
 <div class="card mb-3">
   <div class="card-body p-3">
-    <form method="get" action="{{ url_for('invoices.index') }}" id="filter-form" class="row g-2 align-items-end">
-      <div class="col-md-3">
-        <label class="form-label">Tìm kiếm</label>
-        <input type="text" name="search" class="form-control" placeholder="Số HĐ, người bán, người mua, MST…" value="{{ search }}" />
+    <form method="get" action="{{ url_for('invoices.index') }}" id="filter-form">
+      <div class="row g-2 align-items-end">
+
+        <div class="col-md-3">
+          <label class="form-label">Tìm kiếm</label>
+          <input type="text" name="search" class="form-control"
+                 placeholder="Số HĐ, tên người bán/mua, MST…"
+                 value="{{ search }}" />
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label">Loại hóa đơn</label>
+          <select name="account_id" class="form-select">
+            <option value="">Tất cả tài khoản</option>
+            {% for a in accounts %}
+            <option value="{{ a.id }}" {% if account_id == a.id|string %}selected{% endif %}>{{ a.name }}</option>
+            {% endfor %}
+          </select>
+          <select name="invoice_category" class="form-select">
+            <option value="">Tất cả</option>
+            <option value="purchase_einvoice" {% if invoice_category == 'purchase_einvoice' %}selected{% endif %}>Mua vào (e-invoice)</option>
+            <option value="purchase_pos"      {% if invoice_category == 'purchase_pos'      %}selected{% endif %}>Mua vào (POS)</option>
+            <option value="sale_einvoice"     {% if invoice_category == 'sale_einvoice'     %}selected{% endif %}>Bán ra (e-invoice)</option>
+            <option value="sale_pos"          {% if invoice_category == 'sale_pos'          %}selected{% endif %}>Bán ra (POS)</option>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label">Từ ngày</label>
+          <input type="date" name="start_date" class="form-control"
+                 value="{{ start_date }}" />
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label">Đến ngày</label>
+          <input type="date" name="end_date" class="form-control"
+                 value="{{ end_date }}" />
+        </div>
+
+        <div class="col-md-1">
+          <label class="form-label">Ghi chú</label>
+          <input type="text" name="ghi_chu" class="form-control"
+                 placeholder="CHI PHÍ…" value="{{ ghi_chu }}" />
+        </div>
+
+        <div class="col-md-1">
+          <label class="form-label">Kê khai</label>
+          <input type="text" name="thang_ke_khai" class="form-control"
+                 placeholder="QUÝ I/2026" value="{{ thang_ke_khai }}" />
+        </div>
+
+        <div class="col-md-1 d-flex gap-2">
+          <button type="submit" class="btn btn-brand flex-grow-1">
+            <i class="bi bi-search"></i> Lọc
+          </button>
+          <a href="{{ url_for('invoices.index') }}" class="btn btn-outline-secondary" title="Xóa bộ lọc">
+            <i class="bi bi-x-lg"></i>
+          </a>
+        </div>
+
       </div>
-      <div class="col-md-2">
-        <label class="form-label">Từ ngày</label>
-        <input type="date" name="start_date" id="filter-start" class="form-control"
-               data-dmy="{{ start_date }}" />
+
+      <!-- Active filter tags -->
+      {% set _has_filter = search or invoice_category or start_date or end_date or ghi_chu or thang_ke_khai %}
+      {% if _has_filter %}
+      <div class="d-flex flex-wrap gap-1 mt-2">
+        <span style="font-size:11px; color:var(--text-muted); align-self:center;">Đang lọc:</span>
+        {% if search %}<span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">🔍 {{ search }}</span>{% endif %}
+        {% if invoice_category %}
+          {% set _cat_labels = {'purchase_einvoice':'Mua vào','purchase_pos':'Mua POS','sale_einvoice':'Bán ra','sale_pos':'Bán POS'} %}
+          <span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">📋 {{ _cat_labels.get(invoice_category, invoice_category) }}</span>
+        {% endif %}
+        {% if start_date or end_date %}<span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">📅 {{ start_date or '…' }} → {{ end_date or '…' }}</span>{% endif %}
+        {% if ghi_chu %}<span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">🏷 {{ ghi_chu }}</span>{% endif %}
+        {% if thang_ke_khai %}<span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">📆 {{ thang_ke_khai }}</span>{% endif %}
       </div>
-      <div class="col-md-2">
-        <label class="form-label">Đến ngày</label>
-        <input type="date" name="end_date" id="filter-end" class="form-control"
-               data-dmy="{{ end_date }}" />
-      </div>
-      <div class="col-md-2">
-        <label class="form-label">Ghi chú / Loại</label>
-        <input type="text" name="ghi_chu" class="form-control" placeholder="CHI PHÍ, THƯƠNG MẠI…" value="{{ ghi_chu }}" />
-      </div>
-      <div class="col-md-1">
-        <label class="form-label">Kê khai</label>
-        <input type="text" name="thang_ke_khai" class="form-control" placeholder="QUÝ I/2026" value="{{ thang_ke_khai }}" />
-      </div>
-      <div class="col-md-2 d-flex gap-2">
-        <button type="submit" class="btn btn-brand flex-grow-1">
-          <i class="bi bi-search"></i> Lọc
-        </button>
-        <a href="{{ url_for('invoices.index') }}" class="btn btn-outline-secondary" title="Xóa bộ lọc">
-          <i class="bi bi-x-lg"></i>
-        </a>
-      </div>
+      {% endif %}
+
     </form>
   </div>
 </div>
@@ -133,72 +180,90 @@
     </div>
   </div>
   <div class="card-body p-0" style="overflow-x:auto;">
-    <table class="table table-hover mb-0" style="font-size:10px; min-width:2400px;" id="inv-table">
+    <table class="table table-hover mb-0" style="font-size:10px; min-width:2800px; table-layout:fixed;" id="inv-table">
       <thead>
         <tr>
-          <th data-col="invoice_no" style="white-space:nowrap;">Số HĐ</th>
-          <th data-col="invoice_symbol">Ký hiệu</th>
-          <th data-col="invoice_form">Mẫu số</th>
-          <th data-col="issue_date" style="white-space:nowrap;">Ngày lập</th>
-          <th data-col="status">Trạng thái</th>
-          <th data-col="invoice_type" style="white-space:nowrap;">Loại HĐ</th>
-          <th data-col="payment_method" style="white-space:nowrap;">Thanh toán</th>
-          <th data-col="seller_name">Người bán</th>
-          <th data-col="seller_tax_code" style="white-space:nowrap;">MST bán</th>
-          <th data-col="seller_phone" style="white-space:nowrap;">ĐT bán</th>
-          <th data-col="seller_email">Email bán</th>
-          <th data-col="seller_bank" style="white-space:nowrap;">Số TK</th>
-          <th data-col="seller_bank_name">Ngân hàng bán</th>
-          <th data-col="buyer_name">Người mua</th>
-          <th data-col="buyer_tax_code" style="white-space:nowrap;">MST mua</th>
-          <th data-col="amount" class="text-end" style="white-space:nowrap;">Tiền hàng</th>
-          <th data-col="vat_rate" class="text-end" style="white-space:nowrap;">Thuế suất</th>
-          <th data-col="vat_amount" class="text-end" style="white-space:nowrap;">Thuế GTGT</th>
-          <th data-col="total_amount" class="text-end" style="white-space:nowrap;">Tổng tiền</th>
-          <th data-col="mat_hang">Mặt hàng</th>
-          <th data-col="thang_ke_khai" style="white-space:nowrap;">Kê khai</th>
-          <th data-col="ghi_chu">Ghi chú</th>
-          <th data-col="ma_cong_trinh" style="white-space:nowrap;">Mã CT</th>
-          <th data-col="payment_note" style="white-space:nowrap;">Chứng từ TT</th>
-          <th data-col="bank_name" style="white-space:nowrap;">NH thanh toán</th>
-          <th data-col="so_hop_dong" style="white-space:nowrap;">Số HĐ</th>
-          <th data-col="ngay_hop_dong" style="white-space:nowrap;">Ngày HĐ</th>
-          <th data-col="hd_ban_ra_tuong_ung" style="white-space:nowrap;">HĐ bán ra</th>
-          <th data-col="_actions"></th>
+          <th data-col="invoice_no" class="cw-no" style="white-space:nowrap;">Số HĐ</th>
+          <th data-col="invoice_symbol" class="cw-sym">Ký hiệu</th>
+          <th data-col="invoice_form" class="cw-form">Mẫu số</th>
+          <th data-col="issue_date" class="cw-date" style="white-space:nowrap;">Ngày lập</th>
+          <th data-col="status" class="cw-status">Trạng thái</th>
+          <th data-col="invoice_type" class="cw-type" style="white-space:nowrap;">Loại HĐ</th>
+          <th data-col="payment_method" class="cw-pay" style="white-space:nowrap;">Thanh toán</th>
+          <th data-col="seller_name" class="cw-name">Người bán</th>
+          <th data-col="seller_tax_code" class="cw-mst" style="white-space:nowrap;">MST bán</th>
+          <th data-col="seller_phone" class="cw-phone" style="white-space:nowrap;">ĐT bán</th>
+          <th data-col="seller_email" class="cw-email">Email bán</th>
+          <th data-col="seller_bank" class="cw-bank" style="white-space:nowrap;">Số TK</th>
+          <th data-col="seller_bank_name" class="cw-bankname">Ngân hàng bán</th>
+          <th data-col="buyer_name" class="cw-name">Người mua</th>
+          <th data-col="buyer_tax_code" class="cw-mst" style="white-space:nowrap;">MST mua</th>
+          <th data-col="amount" class="cw-num text-end" style="white-space:nowrap;">Tiền hàng</th>
+          <th data-col="vat_rate" class="cw-vrate text-end" style="white-space:nowrap;">Thuế suất</th>
+          <th data-col="vat_amount" class="cw-num text-end" style="white-space:nowrap;">Thuế GTGT</th>
+          <th data-col="total_amount" class="cw-num text-end" style="white-space:nowrap;">Tổng tiền</th>
+          <th data-col="mat_hang" class="cw-long">Mặt hàng</th>
+          <th data-col="thang_ke_khai" class="cw-kk" style="white-space:nowrap;">Kê khai</th>
+          <th data-col="ghi_chu" class="cw-gchu">Ghi chú</th>
+          <th data-col="ma_cong_trinh" class="cw-mct" style="white-space:nowrap;">Mã CT</th>
+          <th data-col="payment_note" class="cw-pnote" style="white-space:nowrap;">Chứng từ TT</th>
+          <th data-col="bank_name" class="cw-bkname" style="white-space:nowrap;">NH thanh toán</th>
+          <th data-col="so_hop_dong" class="cw-shd" style="white-space:nowrap;">Số HĐ</th>
+          <th data-col="ngay_hop_dong" class="cw-date" style="white-space:nowrap;">Ngày HĐ</th>
+          <th data-col="hd_ban_ra_tuong_ung" class="cw-hdbanra" style="white-space:nowrap;">HĐ bán ra</th>
+          <th data-col="_actions" class="cw-actions"></th>
         </tr>
       </thead>
       <tbody>
         {% for inv in pagination.items %}
         <tr id="row-{{ inv.id }}">
           {# ── Thông tin hóa đơn ── #}
-          <td data-col="invoice_no" style="white-space:nowrap;"><a href="{{ url_for('invoices.detail', invoice_id=inv.id) }}" style="font-family:var(--font-mono); text-decoration:none; color:var(--brand);">{{ inv.invoice_no }}</a></td>
-          <td data-col="invoice_symbol" style="color:var(--text-secondary);">{{ inv.invoice_symbol or '—' }}</td>
-          <td data-col="invoice_form" style="color:var(--text-secondary);">{{ inv.invoice_form or '—' }}</td>
-          <td data-col="issue_date" style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">
+          <td data-col="invoice_no" class="cw-no" style="white-space:nowrap;"><a href="{{ url_for('invoices.detail', invoice_id=inv.id) }}" style="font-family:var(--font-mono); text-decoration:none; color:var(--brand);">{{ inv.invoice_no }}</a></td>
+          <td data-col="invoice_symbol" class="cw-sym" style="color:var(--text-secondary);">{{ inv.invoice_symbol or '—' }}</td>
+          <td data-col="invoice_form" class="cw-form" style="color:var(--text-secondary);">{{ inv.invoice_form or '—' }}</td>
+          <td data-col="issue_date" class="cw-date" style="font-family:var(--font-mono); color:var(--text-secondary);">
             {{ inv.issue_date.strftime('%d/%m/%Y') if inv.issue_date else '—' }}
           </td>
-          <td data-col="status">
+          <td data-col="status" class="cw-status">
             {% if inv.status %}
             <span class="badge" style="background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); font-size:9px; white-space:nowrap;">{{ inv.status[:18] }}</span>
             {% else %}—{% endif %}
           </td>
-          <td data-col="invoice_type" style="font-size:10px; color:var(--text-secondary); white-space:nowrap;">{{ inv.invoice_type or '—' }}</td>
-          <td data-col="payment_method" style="color:var(--text-secondary); white-space:nowrap;">{{ inv.payment_method or '—' }}</td>
+          <td data-col="invoice_type" class="cw-type" style="font-size:12px; color:var(--text-secondary); white-space:nowrap;">{{ inv.invoice_type or '—' }}</td>
+          <td data-col="payment_method" class="cw-pay" style="color:var(--text-secondary); white-space:nowrap;">{{ inv.payment_method or '—' }}</td>
           {# ── Người bán ── #}
-          <td data-col="seller_name" style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.seller_name or '' }}">{{ inv.seller_name or '—' }}</td>
-          <td data-col="seller_tax_code" style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">{{ inv.seller_tax_code or '—' }}</td>
-          <td data-col="seller_phone" style="white-space:nowrap; color:var(--text-secondary);">{{ inv.seller_phone or '—' }}</td>
-          <td data-col="seller_email" style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.seller_email or '' }}">{{ inv.seller_email or '—' }}</td>
-          <td data-col="seller_bank" style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">{{ inv.seller_bank or '—' }}</td>
-          <td data-col="seller_bank_name" style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.seller_bank_name or '' }}">{{ inv.seller_bank_name or '—' }}</td>
+          <td data-col="seller_name" class="cw-name" title="{{ inv.seller_name or '' }}">{{ inv.seller_name or '—' }}</td>
+          <td data-col="seller_tax_code" class="cw-mst" style="color:var(--text-secondary);">{{ inv.seller_tax_code or '—' }}</td>
+          <td data-col="seller_phone" class="cw-phone" style="white-space:nowrap; color:var(--text-secondary);">{{ inv.seller_phone or '—' }}</td>
+          <td data-col="seller_email" class="cw-email" title="{{ inv.seller_email or '' }}">{{ inv.seller_email or '—' }}</td>
+          <td data-col="seller_bank" class="cw-bank" style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">{{ inv.seller_bank or '—' }}</td>
+          <td data-col="seller_bank_name" class="cw-bankname" title="{{ inv.seller_bank_name or '' }}">{{ inv.seller_bank_name or '—' }}</td>
           {# ── Người mua ── #}
-          <td data-col="buyer_name" style="max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.buyer_name or '' }}">{{ inv.buyer_name or '—' }}</td>
-          <td data-col="buyer_tax_code" style="font-family:var(--font-mono); color:var(--text-secondary); white-space:nowrap;">{{ inv.buyer_tax_code or '—' }}</td>
+          <td data-col="buyer_name" class="cw-name" title="{{ inv.buyer_name or '' }}">{{ inv.buyer_name or '—' }}</td>
+          <td data-col="buyer_tax_code" class="cw-mst" style="color:var(--text-secondary);">{{ inv.buyer_tax_code or '—' }}</td>
           {# ── Số tiền ── #}
-          <td data-col="amount" class="text-end" style="font-family:var(--font-mono); color:var(--text-secondary);">{{ "{:,.0f}".format(inv.amount) }}</td>
-          <td data-col="vat_rate" class="text-end" style="color:var(--text-secondary);">{{ inv.vat_rate or '—' }}</td>
-          <td data-col="vat_amount" class="text-end" style="font-family:var(--font-mono); color:var(--info);">{{ "{:,.0f}".format(inv.vat_amount) }}</td>
-          <td data-col="total_amount" class="text-end" style="font-family:var(--font-mono); font-weight:700; color:var(--brand);">{{ "{:,.0f}".format(inv.total_amount) }}</td>
+          <td data-col="amount" class="cw-num vnd vnd-muted text-end">{{ "{:,.0f}".format(inv.amount) }}</td>
+          <td data-col="vat_rate" class="cw-vrate text-end" style="color:var(--text-secondary);">
+            {%- set _vbd = inv.get_vat_breakdown() -%}
+            {%- if _vbd -%}
+              {%- for _vb in _vbd -%}
+                <span title="{{ '{:,.0f}'.format(_vb.vat_amount) }} VND">{{ _vb.vat_rate or '?' }}</span>{% if not loop.last %}<br>{% endif %}
+              {%- endfor -%}
+            {%- else -%}
+              {{ inv.vat_rate or '—' }}
+            {%- endif -%}
+          </td>
+          <td data-col="vat_amount" class="cw-num vnd vnd-tax text-end">
+            {%- set _vbd = inv.get_vat_breakdown() -%}
+            {%- if _vbd and _vbd | length > 1 -%}
+              {%- for _vb in _vbd -%}
+                <span title="{{ _vb.vat_rate }}">{{ '{:,.0f}'.format(_vb.vat_amount) }}</span>{% if not loop.last %}<br>{% endif %}
+              {%- endfor -%}
+            {%- else -%}
+              {{ "{:,.0f}".format(inv.vat_amount) }}
+            {%- endif -%}
+          </td>
+          <td data-col="total_amount" class="cw-num vnd vnd-total text-end">{{ "{:,.0f}".format(inv.total_amount) }}</td>
           {# ── Mặt hàng (XML ưu tiên, fallback mat_hang) ── #}
           {% set _items = inv.get_line_items() %}
           {% if _items %}
@@ -208,22 +273,22 @@
           {% else %}
             {% set _mat_hang_display = inv.mat_hang or '' %}
           {% endif %}
-          <td data-col="mat_hang" style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ _mat_hang_display }}">
+          <td data-col="mat_hang" class="cw-long" title="{{ _mat_hang_display }}">
             {% if _mat_hang_display %}{{ _mat_hang_display }}{% else %}—{% endif %}
           </td>
           {# ── Thông tin bổ sung ── #}
-          <td data-col="thang_ke_khai" style="font-size:11px; color:var(--text-secondary); white-space:nowrap;">{{ inv.thang_ke_khai or '—' }}</td>
-          <td data-col="ghi_chu" style="max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.ghi_chu or '' }}">
+          <td data-col="thang_ke_khai" class="cw-kk" style="font-size:11px; color:var(--text-secondary); white-space:nowrap;">{{ inv.thang_ke_khai or '—' }}</td>
+          <td data-col="ghi_chu" class="cw-gchu" title="{{ inv.ghi_chu or '' }}">
             {% if inv.ghi_chu %}
             <span class="badge" style="background:var(--brand-dim); color:var(--brand); border:1px solid var(--brand-border); font-size:10px;">{{ inv.ghi_chu }}</span>
             {% else %}—{% endif %}
           </td>
-          <td data-col="ma_cong_trinh" style="max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.ma_cong_trinh or '' }}">{{ inv.ma_cong_trinh or '—' }}</td>
-          <td data-col="payment_note" style="max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.payment_note or '' }}">{{ inv.payment_note or '—' }}</td>
-          <td data-col="bank_name" style="max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.bank_name or '' }}">{{ inv.bank_name or '—' }}</td>
-          <td data-col="so_hop_dong" style="max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.so_hop_dong or '' }}">{{ inv.so_hop_dong or '—' }}</td>
-          <td data-col="ngay_hop_dong" style="white-space:nowrap; font-size:11px;">{{ inv.ngay_hop_dong or '—' }}</td>
-          <td data-col="hd_ban_ra_tuong_ung" style="max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ inv.hd_ban_ra_tuong_ung or '' }}">{{ inv.hd_ban_ra_tuong_ung or '—' }}</td>
+          <td data-col="ma_cong_trinh" class="cw-mct" title="{{ inv.ma_cong_trinh or '' }}">{{ inv.ma_cong_trinh or '—' }}</td>
+          <td data-col="payment_note" class="cw-pnote" title="{{ inv.payment_note or '' }}">{{ inv.payment_note or '—' }}</td>
+          <td data-col="bank_name" class="cw-bkname" title="{{ inv.bank_name or '' }}">{{ inv.bank_name or '—' }}</td>
+          <td data-col="so_hop_dong" class="cw-shd" title="{{ inv.so_hop_dong or '' }}">{{ inv.so_hop_dong or '—' }}</td>
+          <td data-col="ngay_hop_dong" class="cw-date" style="white-space:nowrap; font-size:11px;">{{ inv.ngay_hop_dong or '—' }}</td>
+          <td data-col="hd_ban_ra_tuong_ung" class="cw-hdbanra" title="{{ inv.hd_ban_ra_tuong_ung or '' }}">{{ inv.hd_ban_ra_tuong_ung or '—' }}</td>
           {# ── Actions ── #}
           <td data-col="_actions" class="d-flex gap-1" style="white-space:nowrap;">
             <button class="btn btn-sm btn-outline-secondary" title="Chỉnh sửa thông tin bổ sung"
@@ -248,34 +313,14 @@
     </table>
   </div>
 
-  {% if pagination.pages > 1 %}
-  <div class="card-footer d-flex justify-content-between align-items-center" style="font-size:12px; color:var(--text-muted);">
-    <span>Trang {{ pagination.page }} / {{ pagination.pages }} — {{ pagination.total }} hóa đơn</span>
-    <nav>
-      <ul class="pagination pagination-sm mb-0">
-        {% if pagination.has_prev %}
-        <li class="page-item">
-          <a class="page-link" href="?page={{ pagination.prev_num }}&search={{ search }}&start_date={{ start_date }}&end_date={{ end_date }}&ghi_chu={{ ghi_chu }}&thang_ke_khai={{ thang_ke_khai }}">‹</a>
-        </li>
-        {% endif %}
-        {% for p in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
-          {% if p %}
-          <li class="page-item {{ 'active' if p == pagination.page }}">
-            <a class="page-link" href="?page={{ p }}&search={{ search }}&start_date={{ start_date }}&end_date={{ end_date }}&ghi_chu={{ ghi_chu }}&thang_ke_khai={{ thang_ke_khai }}">{{ p }}</a>
-          </li>
-          {% else %}
-          <li class="page-item disabled"><span class="page-link">…</span></li>
-          {% endif %}
-        {% endfor %}
-        {% if pagination.has_next %}
-        <li class="page-item">
-          <a class="page-link" href="?page={{ pagination.next_num }}&search={{ search }}&start_date={{ start_date }}&end_date={{ end_date }}&ghi_chu={{ ghi_chu }}&thang_ke_khai={{ thang_ke_khai }}">›</a>
-        </li>
-        {% endif %}
-      </ul>
-    </nav>
+  <div class="card-footer d-flex align-items-center" style="font-size:12px; color:var(--text-muted);">
+    <span>{{ pagination.total }} hóa đơn</span>
+    {% if pagination.total > 500 %}
+    <span class="ms-3" style="color:var(--warning, #f59e0b);">
+      <i class="bi bi-info-circle"></i> Hiển thị {{ pagination.items | length }} / {{ pagination.total }} — hãy dùng bộ lọc để thu hẹp kết quả
+    </span>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 {% endblock %}
 
@@ -466,15 +511,17 @@ async function exportExcel() {
   statusEl.style.display = 'none';
 
   try {
-    const res  = await fetch('/export/api/excel', {
+    const res = await fetch('/export/api/excel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        start_date:    document.getElementById('filter-start').value || params.get('start_date') || null,
-        end_date:      document.getElementById('filter-end').value   || params.get('end_date')   || null,
-        search:        params.get('search')        || null,
-        ghi_chu:       params.get('ghi_chu')       || null,
-        thang_ke_khai: params.get('thang_ke_khai') || null,
+        start_date:       params.get('start_date')       || null,
+        end_date:         params.get('end_date')         || null,
+        search:           params.get('search')           || null,
+        ghi_chu:          params.get('ghi_chu')          || null,
+        thang_ke_khai:    params.get('thang_ke_khai')    || null,
+        invoice_category: params.get('invoice_category') || null,
+        account_id:       params.get('account_id') ? parseInt(params.get('account_id')) : null,
       }),
     });
     const data = await res.json();
@@ -505,36 +552,5 @@ async function exportExcel() {
     btn.innerHTML = '<i class="bi bi-file-earmark-spreadsheet" style="color:var(--success);"></i> Xuất Excel';
   }
 }
-
-// ── Date picker helpers ───────────────────────────────────────────────────────
-// Convert dd/mm/yyyy (backend format) → YYYY-MM-DD (HTML date input value)
-function dmyToIso(dmy) {
-  if (!dmy) return '';
-  const parts = dmy.split('/');
-  if (parts.length !== 3) return '';
-  const [d, m, y] = parts;
-  return `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-}
-
-// Convert YYYY-MM-DD → dd/mm/yyyy (what the backend expects)
-function isoToDmy(iso) {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y}`;
-}
-
-// On page load: populate date pickers from server-rendered dd/mm/yyyy values
-document.querySelectorAll('input[type="date"][data-dmy]').forEach(el => {
-  const iso = dmyToIso(el.dataset.dmy);
-  if (iso) el.value = iso;
-});
-
-// Intercept form submit: convert YYYY-MM-DD values back to dd/mm/yyyy for the backend
-document.getElementById('filter-form').addEventListener('submit', function(e) {
-  ['filter-start', 'filter-end'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el && el.value) el.value = isoToDmy(el.value);
-  });
-});
 </script>
 {% endblock %}

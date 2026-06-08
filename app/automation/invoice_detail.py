@@ -155,18 +155,16 @@ def _is_already_crawled(
     invoice_no: str,
     invoice_symbol: Optional[str] = None,
     invoice_form: Optional[str] = None,
+    invoice_category: Optional[str] = None,
     issue_date_str: str = "",
     total_payment: str = "0",
 ) -> bool:
     """
     Trả về True nếu hóa đơn đã tồn tại trong DB và không ở trạng thái lỗi.
 
-    Check theo composite key (invoice_no + invoice_symbol + invoice_form) thay
-    vì chỉ invoice_no — tránh bỏ qua nhầm hóa đơn điều chỉnh/thay thế có cùng
-    số nhưng khác ký hiệu / mẫu.
-
-    issue_date_str và total_payment được log ra để dễ debug, không dùng để query
-    (DB đã có các trường này từ XML nên không nên so sánh chuỗi thô từ bảng).
+    Check theo composite key (invoice_no + invoice_symbol + invoice_form +
+    invoice_category) — phương án A: mỗi chiều là một record riêng.
+    Cùng số hóa đơn ở Bán ra và Mua vào sẽ KHÔNG skip nhau.
     """
     if not invoice_no or invoice_no.startswith("unknown_"):
         return False
@@ -175,11 +173,12 @@ def _is_already_crawled(
             invoice_no=invoice_no,
             invoice_symbol=invoice_symbol or None,
             invoice_form=invoice_form or None,
+            invoice_category=invoice_category or None,
         )
         if existing and existing.status not in ("failed", "error"):
             logger.debug(
-                "Skip #{} symbol={} form={} date={} total={} — already in DB (id={}, status={})",
-                invoice_no, invoice_symbol, invoice_form,
+                "Skip #{} symbol={} form={} category={} date={} total={} — already in DB (id={}, status={})",
+                invoice_no, invoice_symbol, invoice_form, invoice_category,
                 issue_date_str, total_payment,
                 existing.id, existing.status,
             )
@@ -306,6 +305,7 @@ async def process_invoice_row(
             invoice_no=invoice_no,
             invoice_symbol=row_data.get("invoice_symbol") or None,
             invoice_form=row_data.get("invoice_form") or None,
+            invoice_category=invoice_category or None,
             issue_date_str=issue_date_str,
             total_payment=row_data.get("total_payment", "0"),
         ):
@@ -314,7 +314,7 @@ async def process_invoice_row(
 
         emit(f"Processing row {row_index + 1}: Invoice #{invoice_no} ({issue_date_str})")
 
-        inv_dir = ensure_invoice_dir(invoice_no, issue_date)
+        inv_dir = ensure_invoice_dir(invoice_no, issue_date, suffix=invoice_category)
 
         # ── 3. Click chọn dòng, wait for action panel / buttons to appear
         await row_locator.click()

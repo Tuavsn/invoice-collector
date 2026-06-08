@@ -10,52 +10,17 @@
       <div class="card-body p-4">
         <div id="save-alert" class="mb-3" style="display:none;"></div>
 
-        <!-- GDT Credentials (env-only, read-only display) -->
-        <h6 class="mb-3" style="color:var(--text-secondary); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700;">
-          <i class="bi bi-key me-1"></i> GDT Credentials <span style="color:var(--text-muted); font-weight:400; text-transform:none;">(set via .env file)</span>
-        </h6>
-        <div class="row g-3 mb-4">
-          <div class="col-md-6">
-            <label class="form-label">GDT_USERNAME</label>
-            <div class="d-flex align-items-center gap-2 p-2" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); font-size:13px; font-family:var(--font-mono);">
-              {% if cred_status.username_set %}
-                <i class="bi bi-check-circle-fill" style="color:var(--success);"></i>
-                <span style="color:var(--text-secondary);">{{ cred_status.username_hint }}</span>
-              {% else %}
-                <i class="bi bi-x-circle-fill" style="color:var(--danger);"></i>
-                <span style="color:var(--danger);">Not set</span>
-              {% endif %}
-            </div>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">GDT_PASSWORD</label>
-            <div class="d-flex align-items-center gap-2 p-2" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); font-size:13px; font-family:var(--font-mono);">
-              {% if cred_status.password_set %}
-                <i class="bi bi-check-circle-fill" style="color:var(--success);"></i>
-                <span style="color:var(--text-secondary);">••••••••</span>
-              {% else %}
-                <i class="bi bi-x-circle-fill" style="color:var(--danger);"></i>
-                <span style="color:var(--danger);">Not set</span>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        <div class="mb-4 p-3" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); font-size:12px; color:var(--text-muted); line-height:1.7;">
-          <i class="bi bi-info-circle me-1"></i>
-          Add the following to your <code>.env</code> file, then restart the app:
-          <pre style="margin:8px 0 0; color:var(--text-secondary); font-size:12px; background:transparent; padding:0;">GDT_USERNAME=your_username
-GDT_PASSWORD=your_password</pre>
-        </div>
-
         <hr style="border-color:var(--border); margin-bottom:20px;">
 
+        <!-- ── Crawler ──────────────────────────────────────────────── -->
         <h6 class="mb-3" style="color:var(--brand); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700;">
           <i class="bi bi-cpu me-1"></i> Crawler
         </h6>
         <div class="row g-3 mb-4">
           <div class="col-md-4">
             <label class="form-label">Max Retries</label>
-            <input type="number" name="crawler_max_retries" class="form-control setting-input" value="{{ settings.crawler_max_retries }}" min="1" max="20" />
+            <input type="number" name="crawler_max_retries" class="form-control setting-input"
+                   value="{{ settings.crawler_max_retries }}" min="1" max="20" />
           </div>
           <div class="col-md-4">
             <label class="form-label">Page Size</label>
@@ -67,12 +32,14 @@ GDT_PASSWORD=your_password</pre>
           </div>
           <div class="col-md-4">
             <label class="form-label">Delay between rows (ms)</label>
-            <input type="number" name="crawler_delay_ms" class="form-control setting-input" value="{{ settings.crawler_delay_ms }}" min="100" max="5000" />
+            <input type="number" name="crawler_delay_ms" class="form-control setting-input"
+                   value="{{ settings.crawler_delay_ms }}" min="100" max="5000" />
           </div>
         </div>
 
         <hr style="border-color:var(--border); margin-bottom:20px;">
 
+        <!-- ── Playwright ───────────────────────────────────────────── -->
         <h6 class="mb-3" style="color:var(--warning); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700;">
           <i class="bi bi-browser-chrome me-1"></i> Playwright
         </h6>
@@ -86,11 +53,13 @@ GDT_PASSWORD=your_password</pre>
           </div>
           <div class="col-md-4">
             <label class="form-label">Timeout (ms)</label>
-            <input type="number" name="playwright_timeout" class="form-control setting-input" value="{{ settings.playwright_timeout }}" min="5000" />
+            <input type="number" name="playwright_timeout" class="form-control setting-input"
+                   value="{{ settings.playwright_timeout }}" min="5000" />
           </div>
           <div class="col-md-4">
             <label class="form-label">Slow Motion (ms)</label>
-            <input type="number" name="playwright_slow_mo" class="form-control setting-input" value="{{ settings.playwright_slow_mo }}" min="0" max="2000" />
+            <input type="number" name="playwright_slow_mo" class="form-control setting-input"
+                   value="{{ settings.playwright_slow_mo }}" min="0" max="2000" />
           </div>
         </div>
 
@@ -124,18 +93,158 @@ GDT_PASSWORD=your_password</pre>
       </div>
     </div>
 
-    <!-- Auto Sync Info -->
     <div class="card mt-3">
       <div class="card-header"><i class="bi bi-arrow-repeat"></i> Auto Sync Schedule</div>
       <div class="card-body" style="font-size:13px; color:var(--text-secondary); line-height:1.7;">
-        To run daily auto-sync, add a cron job (Linux/macOS) or Scheduled Task (Windows):
-        <pre style="margin-top:10px; font-size:11px; background:var(--surface-2); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border); color:var(--text-secondary);"># Runs every day at 02:00
-0 2 * * * curl -s -X POST http://localhost:5000/crawler/api/start \
-  -H "Content-Type: application/json" \
-  -d '{"mode":"auto_sync"}'</pre>
-        <div class="mt-2" style="font-size:11px; color:var(--text-muted);">
-          Auto Sync covers the last 2 calendar months up to today, split into 30-day chunks automatically.
+        Auto-sync được cấu hình trực tiếp trên trang <a href="/crawler/">Crawler</a> — chọn preset và giờ chạy hàng ngày.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── GDT Accounts ────────────────────────────────────────────────────── -->
+<div class="row g-3 mt-1">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-person-badge"></i> Tài khoản GDT</span>
+        <button class="btn btn-sm btn-brand" onclick="openAddAccount()">
+          <i class="bi bi-plus"></i> Thêm tài khoản
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0" style="font-size:13px;">
+          <thead style="background:var(--surface-2);">
+            <tr>
+              <th style="width:160px;">Tên hiển thị</th>
+              <th style="width:140px;">Username</th>
+              <th style="width:100px;">MST GDT</th>
+              <th style="width:180px;">Tên công ty (Excel)</th>
+              <th style="width:100px;">MST công ty</th>
+              <th>Ghi chú</th>
+              <th style="width:70px;">Trạng thái</th>
+              <th style="width:100px;"></th>
+            </tr>
+          </thead>
+          <tbody id="accounts-tbody">
+            {% for a in accounts %}
+            <tr id="acct-row-{{ a.id }}">
+              <td class="fw-600">{{ a.name }}</td>
+              <td style="font-family:var(--font-mono); font-size:12px;">{{ a.username }}</td>
+              <td style="font-family:var(--font-mono); font-size:12px;">{{ a.tax_code or '—' }}</td>
+              <td style="font-size:12px; color:var(--text-secondary);">{{ a.company_name or '—' }}</td>
+              <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted);">{{ a.company_tax_code or '—' }}</td>
+              <td style="color:var(--text-muted); font-size:12px;">{{ a.note or '' }}</td>
+              <td>
+                {% if a.is_active %}
+                  <span class="badge" style="background:var(--success-bg);color:var(--success);border:1px solid var(--success-border);">Active</span>
+                {% else %}
+                  <span class="badge" style="background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);">Inactive</span>
+                {% endif %}
+              </td>
+              <td>
+                <button class="btn btn-xs btn-outline-secondary me-1" onclick="editAccount({{ a.id }}, '{{ a.name|e }}', '{{ a.username|e }}', '{{ a.tax_code or "" }}', '{{ a.note or "" }}', {{ a.is_active|tojson }}, '{{ a.company_name|e if a.company_name else "" }}', '{{ a.company_tax_code|e if a.company_tax_code else "" }}', '{{ a.company_address|e if a.company_address else "" }}', '{{ a.company_report_title|e if a.company_report_title else "" }}')">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-xs btn-outline-danger" onclick="deleteAccount({{ a.id }}, '{{ a.name|e }}')">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-center py-3" style="color:var(--text-muted);">Chưa có tài khoản nào. Thêm tài khoản để bắt đầu crawl.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Add/Edit Account -->
+<div class="modal fade" id="modal-account" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-account-title">Thêm tài khoản GDT</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="acct-id" value="">
+        <div class="mb-3">
+          <label class="form-label">Tên hiển thị <span class="text-danger">*</span></label>
+          <input type="text" id="acct-name" class="form-control" placeholder="Công ty A">
         </div>
+        <div class="mb-3">
+          <label class="form-label">Username (GDT) <span class="text-danger">*</span></label>
+          <input type="text" id="acct-username" class="form-control" style="font-family:var(--font-mono);" placeholder="0123456789">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <input type="password" id="acct-password" class="form-control" style="font-family:var(--font-mono);">
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePwd()"><i class="bi bi-eye" id="pwd-eye"></i></button>
+          </div>
+          <div class="form-text" id="acct-pwd-hint"></div>
+        </div>
+        <div class="row g-2">
+          <div class="col-md-5">
+            <label class="form-label">MST</label>
+            <input type="text" id="acct-taxcode" class="form-control" style="font-family:var(--font-mono);" placeholder="0123456789">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label">Ghi chú</label>
+            <input type="text" id="acct-note" class="form-control" placeholder="VD: Công ty chính">
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="acct-active" checked>
+            <label class="form-check-label" for="acct-active">Active (cho phép crawl)</label>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border); margin:12px 0;">
+        <div style="font-size:11px; font-weight:700; color:var(--brand); text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px;">
+          <i class="bi bi-building"></i> Thông tin công ty (cho header Excel)
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Tên công ty</label>
+          <input type="text" id="acct-company-name" class="form-control form-control-sm"
+                 placeholder="CÔNG TY TNHH ...">
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-4">
+            <label class="form-label">Mã số thuế</label>
+            <input type="text" id="acct-company-tax" class="form-control form-control-sm"
+                   style="font-family:var(--font-mono);" placeholder="0123456789">
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Địa chỉ</label>
+            <input type="text" id="acct-company-addr" class="form-control form-control-sm"
+                   placeholder="Số 1, Đường ABC, TP.HCM">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Tiêu đề báo cáo</label>
+          <input type="text" id="acct-company-title" class="form-control form-control-sm"
+                 placeholder="BẢNG KÊ TỔNG HỢP NĂM 2026">
+          <div class="form-text">Để trống → dùng tiêu đề mặc định theo loại HĐ.</div>
+        </div>
+
+        <!-- Live preview -->
+        <div class="p-2 mt-1" style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; font-size:10px; font-family:var(--font-mono); color:var(--text-secondary); line-height:1.9;">
+          <div><span style="color:var(--text-muted);">Tên công ty :</span> <span id="prev-cname">—</span></div>
+          <div><span style="color:var(--text-muted);">Mã số thuế  :</span> <span id="prev-ctax">—</span></div>
+          <div><span style="color:var(--text-muted);">Địa chỉ     :</span> <span id="prev-caddr">—</span></div>
+          <div style="color:var(--brand); font-weight:700;"><span id="prev-ctitle">BẢNG KÊ HÓA ĐƠN CHỨNG TỪ HÀNG HÓA, DỊCH VỤ MUA VÀO / BÁN RA</span></div>
+        </div>
+
+        <div id="acct-error" class="mt-2 text-danger" style="font-size:12px; display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Huỷ</button>
+        <button class="btn btn-brand" onclick="saveAccount()">Lưu</button>
       </div>
     </div>
   </div>
@@ -152,24 +261,161 @@ async function saveSettings() {
   const alertEl = document.getElementById('save-alert');
   try {
     const res    = await fetch('/settings/api/save', {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body:    JSON.stringify(data),
     });
     const result = await res.json();
     alertEl.style.display = 'block';
     if (result.ok) {
       alertEl.style.cssText = 'display:block; background:var(--success-bg); border:1px solid var(--success-border); color:var(--success); padding:12px 16px; border-radius:10px; font-size:13px;';
-      alertEl.innerHTML = `<i class="bi bi-check-circle me-1"></i> Settings saved: ${result.saved.join(', ')}`;
+      alertEl.innerHTML = `<i class="bi bi-check-circle me-1"></i> Đã lưu: ${result.saved.join(', ')}`;
     } else {
       alertEl.style.cssText = 'display:block; background:var(--danger-bg); border:1px solid var(--danger-border); color:var(--danger); padding:12px 16px; border-radius:10px; font-size:13px;';
-      alertEl.innerHTML = `<i class="bi bi-x-circle me-1"></i> Error saving settings.`;
+      alertEl.innerHTML = `<i class="bi bi-x-circle me-1"></i> Lỗi khi lưu settings.`;
     }
   } catch(e) {
     alertEl.style.display = 'block';
     alertEl.innerHTML = `Error: ${e}`;
   }
   setTimeout(() => alertEl.style.display = 'none', 3500);
+}
+</script>
+
+<script>
+// ── GDT Accounts ──────────────────────────────────────────────────────────
+let _accountModal = null;
+function _getModal() {
+  if (!_accountModal) _accountModal = new bootstrap.Modal(document.getElementById('modal-account'));
+  return _accountModal;
+}
+
+function _resetCompanyPreview() {
+  document.getElementById('prev-cname').textContent  = document.getElementById('acct-company-name').value  || '—';
+  document.getElementById('prev-ctax').textContent   = document.getElementById('acct-company-tax').value   || '—';
+  document.getElementById('prev-caddr').textContent  = document.getElementById('acct-company-addr').value  || '—';
+  document.getElementById('prev-ctitle').textContent = document.getElementById('acct-company-title').value
+    || 'BẢNG KÊ HÓA ĐƠN CHỨNG TỪ HÀNG HÓA, DỊCH VỤ MUA VÀO / BÁN RA';
+}
+
+function _bindCompanyPreview() {
+  ['acct-company-name','acct-company-tax','acct-company-addr','acct-company-title'].forEach(id => {
+    const el = document.getElementById(id);
+    const map = {
+      'acct-company-name':  'prev-cname',
+      'acct-company-tax':   'prev-ctax',
+      'acct-company-addr':  'prev-caddr',
+      'acct-company-title': 'prev-ctitle',
+    };
+    el.oninput = () => {
+      document.getElementById(map[id]).textContent = el.value
+        || (id === 'acct-company-title' ? 'BẢNG KÊ HÓA ĐƠN CHỨNG TỪ HÀNG HÓA, DỊCH VỤ MUA VÀO / BÁN RA' : '—');
+    };
+  });
+}
+
+function openAddAccount() {
+  document.getElementById('modal-account-title').textContent = 'Thêm tài khoản GDT';
+  document.getElementById('acct-id').value            = '';
+  document.getElementById('acct-name').value          = '';
+  document.getElementById('acct-username').value      = '';
+  document.getElementById('acct-password').value      = '';
+  document.getElementById('acct-taxcode').value       = '';
+  document.getElementById('acct-note').value          = '';
+  document.getElementById('acct-active').checked      = true;
+  document.getElementById('acct-company-name').value  = '';
+  document.getElementById('acct-company-tax').value   = '';
+  document.getElementById('acct-company-addr').value  = '';
+  document.getElementById('acct-company-title').value = '';
+  document.getElementById('acct-pwd-hint').textContent = '';
+  document.getElementById('acct-error').style.display = 'none';
+  _resetCompanyPreview();
+  _bindCompanyPreview();
+  _getModal().show();
+}
+
+function editAccount(id, name, username, taxcode, note, isActive,
+                     companyName='', companyTax='', companyAddr='', companyTitle='') {
+  document.getElementById('modal-account-title').textContent = 'Sửa tài khoản';
+  document.getElementById('acct-id').value            = id;
+  document.getElementById('acct-name').value          = name;
+  document.getElementById('acct-username').value      = username;
+  document.getElementById('acct-password').value      = '';
+  document.getElementById('acct-taxcode').value       = taxcode;
+  document.getElementById('acct-note').value          = note;
+  document.getElementById('acct-active').checked      = isActive;
+  document.getElementById('acct-company-name').value  = companyName;
+  document.getElementById('acct-company-tax').value   = companyTax;
+  document.getElementById('acct-company-addr').value  = companyAddr;
+  document.getElementById('acct-company-title').value = companyTitle;
+  document.getElementById('acct-pwd-hint').textContent = 'Để trống nếu không muốn đổi mật khẩu';
+  document.getElementById('acct-error').style.display = 'none';
+  _resetCompanyPreview();
+  _bindCompanyPreview();
+  _getModal().show();
+}
+
+function togglePwd() {
+  const inp = document.getElementById('acct-password');
+  const eye = document.getElementById('pwd-eye');
+  if (inp.type === 'password') { inp.type = 'text';     eye.className = 'bi bi-eye-slash'; }
+  else                         { inp.type = 'password'; eye.className = 'bi bi-eye'; }
+}
+
+async function saveAccount() {
+  const id       = document.getElementById('acct-id').value;
+  const name     = document.getElementById('acct-name').value.trim();
+  const username = document.getElementById('acct-username').value.trim();
+  const password = document.getElementById('acct-password').value;
+  const taxcode  = document.getElementById('acct-taxcode').value.trim();
+  const note     = document.getElementById('acct-note').value.trim();
+  const isActive = document.getElementById('acct-active').checked;
+  const errEl    = document.getElementById('acct-error');
+
+  if (!name || !username) {
+    errEl.textContent = 'Tên và username là bắt buộc.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!id && !password) {
+    errEl.textContent = 'Password là bắt buộc khi tạo mới.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const body = {
+    name, username, tax_code: taxcode, note, is_active: isActive,
+    company_name:         document.getElementById('acct-company-name').value.trim()  || null,
+    company_tax_code:     document.getElementById('acct-company-tax').value.trim()   || null,
+    company_address:      document.getElementById('acct-company-addr').value.trim()  || null,
+    company_report_title: document.getElementById('acct-company-title').value.trim() || null,
+  };
+  if (password) body.password = password;
+
+  const url    = id ? `/crawler/api/accounts/${id}` : '/crawler/api/accounts';
+  const method = id ? 'PATCH' : 'POST';
+
+  const res  = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json();
+
+  if (data.ok) {
+    _getModal().hide();
+    location.reload();
+  } else {
+    errEl.textContent = data.error || 'Lỗi không xác định';
+    errEl.style.display = 'block';
+  }
+}
+
+async function deleteAccount(id, name) {
+  if (!confirm(`Xoá tài khoản "${name}"?`)) return;
+  const res  = await fetch(`/crawler/api/accounts/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById(`acct-row-${id}`)?.remove();
+  } else {
+    alert(data.error || 'Lỗi khi xoá');
+  }
 }
 </script>
 {% endblock %}

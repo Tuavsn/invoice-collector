@@ -408,6 +408,7 @@ body {
   border-bottom: 1px solid var(--border);
   padding: 8px 10px;
   vertical-align: top;
+  text-align: justify;
   font-size: 12px;
   color: var(--text-primary);
 }
@@ -756,7 +757,7 @@ hr { border-color: var(--border); }
   padding: 6px 8px;
 }
 
-/* Sticky number column */
+/* Sticky first column */
 .table th:first-child,
 .table td:first-child {
   position: sticky;
@@ -770,3 +771,90 @@ hr { border-color: var(--border); }
   background: #f0f7ff;
 }
 
+/* ── VNĐ number display ─────────────────────────────────────── */
+/*
+  Dùng class .vnd cho mọi ô hiển thị số tiền VNĐ.
+  - font-mono để các chữ số thẳng hàng
+  - font-variant-numeric: tabular-nums đảm bảo mỗi chữ số chiếm đúng 1 ô
+  - text-align: right
+  - letter-spacing âm nhẹ cho mono đọc dễ hơn
+*/
+.vnd {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.vnd.vnd-total {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.vnd.vnd-tax {
+  color: var(--info);
+}
+
+.vnd.vnd-muted {
+  color: var(--text-secondary);
+}
+
+/* ── Invoice table column widths ────────────────────────────── */
+/*
+  Hệ thống width chuẩn dùng cho cả invoices và snapshot.
+  Áp dụng trực tiếp lên <th> và <td>.
+  Table phải có table-layout:fixed để các width này có hiệu lực.
+*/
+
+/* Số hóa đơn */
+.cw-no       { width: 88px;  min-width: 88px; }
+/* Ký hiệu / Mẫu số */
+.cw-sym      { width: 72px;  min-width: 72px; }
+.cw-form     { width: 64px;  min-width: 64px; }
+/* Ngày */
+.cw-date     { width: 82px;  min-width: 82px;  white-space: nowrap; }
+/* Trạng thái / Badge nhỏ */
+.cw-status   { width: 76px;  min-width: 76px; }
+/* Loại HĐ */
+.cw-type     { width: 250px;  min-width: 250px; }
+/* Phương thức thanh toán */
+.cw-pay      { width: 170px;  min-width: 170px; }
+/* Tên người bán / mua — cho phép wrap */
+.cw-name     { width: 600px; min-width: 600px; word-break: break-word; white-space: normal; }
+/* MST */
+.cw-mst      { width: 120px; min-width: 10620;  white-space: nowrap; font-family: var(--font-mono); font-size: 11px; }
+/* SĐT */
+.cw-phone    { width: 120px;  min-width: 120px;  white-space: nowrap; }
+/* Email */
+.cw-email    { width: 250px; min-width: 250px; word-break: break-word; white-space: normal; font-size: 11px; }
+/* Số tài khoản */
+.cw-bank     { width: 170px; min-width: 170px; font-family: var(--font-mono); font-size: 11px; }
+/* Tên ngân hàng */
+.cw-bankname { width: 500px; min-width: 500px; word-break: break-word; white-space: normal; }
+/* Số tiền (tiền hàng, thuế, tổng) */
+.cw-num      { width: 150px; min-width: 150px; }
+/* Thuế suất — nhỏ */
+.cw-vrate    { width: 150px;  min-width: 150px; }
+/* Mặt hàng — cột rộng nhất, cho phép wrap */
+.cw-long     { width: 500px; min-width: 500px; word-break: break-word; white-space: normal; line-height: 1.4; }
+/* Tháng kê khai */
+.cw-kk       { width: 150px;  min-width: 150px;  white-space: nowrap; }
+/* Ghi chú */
+.cw-gchu     { width: 350px; min-width: 350px;  word-break: break-word; white-space: normal; }
+/* Mã công trình */
+.cw-mct      { width: 150px;  min-width: 150px;  word-break: break-word; white-space: normal; }
+/* Chứng từ thanh toán */
+.cw-pnote    { width: 200px; min-width: 200px; word-break: break-word; white-space: normal; }
+/* Ngân hàng thanh toán */
+.cw-bkname   { width: 300px;  min-width: 300px;  word-break: break-word; white-space: normal; }
+/* Số hợp đồng */
+.cw-shd      { width: 120px; min-width: 100px; word-break: break-word; white-space: normal; }
+/* HĐ bán ra tương ứng */
+.cw-hdbanra  { width: 100px; min-width: 86px;  word-break: break-word; white-space: normal; }
+/* Actions */
+.cw-actions  { width: 68px;  min-width: 60px;  white-space: nowrap; }
+/* Checkbox */
+.cw-chk      { width: 36px;  min-width: 36px;  text-align: center; }

@@ -65,6 +65,7 @@ class BrowserManager:
             ),
             accept_downloads=True,
             locale="vi-VN",
+            ignore_https_errors=True,
         )
 
         # Load session cũ nếu tồn tại

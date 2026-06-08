@@ -22,6 +22,8 @@ def api_excel():
     ghi_chu       = (data.get("ghi_chu")       or "").strip() or None
     thang_ke_khai = (data.get("thang_ke_khai") or "").strip() or None
     search        = (data.get("search")        or "").strip() or None
+    account_id_raw = data.get("account_id")
+    account_id     = int(account_id_raw) if account_id_raw else None
 
     try:
         path = ExcelService.export_vat_summary(
@@ -30,6 +32,7 @@ def api_excel():
             ghi_chu=ghi_chu,
             thang_ke_khai=thang_ke_khai,
             search=search,
+            account_id=account_id,
         )
         return jsonify({"ok": True, "file": path.name, "path": str(path)})
     except Exception as exc:

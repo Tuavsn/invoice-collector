@@ -9,15 +9,37 @@ from flask import Flask
 from app.config import Config
 from app.db.database import init_db
 from app.extensions import db, socketio
-from app.utils.logger import setup_logging
-
+from loguru import logger
+import logging
+import sys
 
 def create_app() -> Flask:
     # Ensure directories exist before anything else
     Config.ensure_directories()
 
-    # Logging
-    setup_logging(Config.LOG_PATH)
+    logger.remove()
+
+    logger.add(
+        Config.LOG_PATH / "app_{time:YYYY-MM-DD}.log", 
+        rotation="00:00", 
+        retention="30 days", 
+        encoding="utf-8", 
+        level="DEBUG",
+        enqueue=True
+    )
+
+    logger.add(
+        sys.stdout,
+        level="INFO",
+        enqueue=True,
+        format=(
+            "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
+            "{level:<8} | "
+            "{message}"
+        ),
+    )
+
+    setup_logging()
 
     app = Flask(
         __name__,
@@ -61,3 +83,34 @@ def create_app() -> Flask:
         restore_auto_sync_on_startup(app=app)
 
     return app
+
+class InterceptHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        logger.opt(
+            exception=record.exc_info,
+            depth=6,
+        ).log(level, record.getMessage())
+
+
+def setup_logging() -> None:
+    intercept_handler = InterceptHandler()
+
+    for name in (
+        "werkzeug",
+        "flask.app",
+        "engineio",
+        "socketio",
+    ):
+        log = logging.getLogger(name)
+        log.handlers = [intercept_handler]
+        log.propagate = False
+        log.setLevel(logging.INFO)
+
+    root_logger = logging.getLogger()
+    root_logger.handlers = [intercept_handler]
+    root_logger.setLevel(logging.INFO)

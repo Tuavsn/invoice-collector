@@ -38,7 +38,7 @@ RUN playwright install chromium --with-deps
 COPY . .
 
 # ── Runtime directories ──────────────────────────────────────────
-RUN mkdir -p downloads invoices exports logs/screenshots
+RUN mkdir -p invoices exports logs/screenshots
 
 # ── Environment defaults ─────────────────────────────────────────
 ENV FLASK_ENV=production \

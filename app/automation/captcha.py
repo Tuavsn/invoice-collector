@@ -1,7 +1,3 @@
-# captcha.py
-"""
-CAPTCHA image capture — chụp ảnh và trả về base64 để user tự nhập.
-"""
 from __future__ import annotations
 
 import asyncio
@@ -13,36 +9,29 @@ from playwright.async_api import Locator
 
 from app.config import Config
 
+_CAPTCHA_SELECTOR = "img[alt='captcha']"
 
-async def get_captcha_image_b64(
-    modal: Locator,
-    captcha_selector: str = "img[alt='captcha']",
-) -> Optional[str]:
-    """Chụp captcha trong modal và trả về chuỗi PNG base64."""
+
+async def get_captcha_image_b64(modal: Locator) -> Optional[str]:
     try:
-        element = modal.locator(captcha_selector).first
+        element = modal.locator(_CAPTCHA_SELECTOR).first
         await element.wait_for(state="visible", timeout=10_000)
         raw_bytes = await element.screenshot()
     except Exception as exc:
-        logger.error("Failed to screenshot captcha '{}': {}", captcha_selector, exc)
+        logger.error("Failed to screenshot captcha: {}", exc)
         return None
 
     try:
-        debug_path = Config.SCREENSHOT_PATH / "captcha_latest.png"
-        debug_path.write_bytes(raw_bytes)
+        (Config.SCREENSHOT_PATH / "captcha_latest.png").write_bytes(raw_bytes)
     except Exception:
         pass
 
     return base64.b64encode(raw_bytes).decode("utf-8")
 
 
-async def refresh_captcha(
-    modal: Locator,
-    captcha_selector: str = "img[alt='captcha']",
-) -> None:
-    """Click vào ảnh captcha trong modal để load captcha mới."""
+async def refresh_captcha(modal: Locator) -> None:
     try:
-        element = modal.locator(captcha_selector).first
+        element = modal.locator(_CAPTCHA_SELECTOR).first
         await element.wait_for(state="visible", timeout=5_000)
         await element.click()
         await asyncio.sleep(1)

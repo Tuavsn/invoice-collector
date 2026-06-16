@@ -29,7 +29,6 @@ logs/
 *.log
 
 # Runtime folders
-downloads/
 exports/
 invoices/
 instance/

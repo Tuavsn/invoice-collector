@@ -41,7 +41,6 @@ class Config:
     )
 
     # ------------------------------------------------------------------ Paths
-    DOWNLOAD_PATH: Path = BASE_DIR / os.getenv("DOWNLOAD_PATH", "downloads")
     INVOICE_PATH: Path = BASE_DIR / os.getenv("INVOICE_PATH", "invoices")
     EXPORT_PATH: Path = BASE_DIR / os.getenv("EXPORT_PATH", "exports")
     LOG_PATH: Path = BASE_DIR / os.getenv("LOG_PATH", "logs")
@@ -67,7 +66,6 @@ class Config:
     def ensure_directories(cls) -> None:
         """Create all required directories if they do not exist."""
         for path in (
-            cls.DOWNLOAD_PATH,
             cls.INVOICE_PATH,
             cls.EXPORT_PATH,
             cls.LOG_PATH,

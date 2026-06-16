@@ -17,7 +17,6 @@ services:
       # Persist database
       - ./invoices.db:/app/invoices.db
       # Persist downloaded files
-      - ./downloads:/app/downloads
       - ./invoices:/app/invoices
       - ./exports:/app/exports
       - ./logs:/app/logs

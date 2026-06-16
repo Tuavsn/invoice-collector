@@ -825,7 +825,7 @@ hr { border-color: var(--border); }
 /* Tên người bán / mua — cho phép wrap */
 .cw-name     { width: 600px; min-width: 600px; word-break: break-word; white-space: normal; }
 /* MST */
-.cw-mst      { width: 120px; min-width: 10620;  white-space: nowrap; font-family: var(--font-mono); font-size: 11px; }
+.cw-mst      { width: 120px; min-width: 120px;  white-space: nowrap; font-family: var(--font-mono); font-size: 11px; }
 /* SĐT */
 .cw-phone    { width: 120px;  min-width: 120px;  white-space: nowrap; }
 /* Email */

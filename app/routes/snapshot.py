@@ -149,6 +149,8 @@ def api_create():
         return jsonify(ok=False, error="Vui lòng đặt tên cho batch."), 400
     if not invoice_ids or not isinstance(invoice_ids, list):
         return jsonify(ok=False, error="Chưa chọn hóa đơn nào."), 400
+    if not account_id:
+        return jsonify(ok=False, error="Vui lòng chọn công ty trước khi chốt batch."), 400
 
     try:
         invoice_ids = [int(i) for i in invoice_ids]
@@ -223,7 +225,7 @@ def api_export_new():
         return jsonify(ok=False, error="Không có hóa đơn nào để xuất."), 404
 
     try:
-        path = ExcelService.export_from_list(invoices, label="HĐ mới chưa chốt")
+        path = ExcelService.export_from_list(invoices, label="HĐ mới chưa chốt", account_id=account_id)
         return jsonify(ok=True, file=path.name, path=str(path))
     except Exception as exc:
         return jsonify(ok=False, error=str(exc)), 500
@@ -241,7 +243,7 @@ def api_export_batch(batch_id: int):
         return jsonify(ok=False, error="Batch không có hóa đơn."), 404
 
     try:
-        path = ExcelService.export_from_list(invoices, label=batch.label)
+        path = ExcelService.export_from_list(invoices, label=batch.label, account_id=batch.account_id)
         return jsonify(ok=True, file=path.name, path=str(path))
     except Exception as exc:
         return jsonify(ok=False, error=str(exc)), 500

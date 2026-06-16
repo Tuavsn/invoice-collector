@@ -1,6 +1,7 @@
 """Crawler blueprint — UI and API for starting/stopping crawls."""
 from __future__ import annotations
 
+import json
 import os
 import threading
 from calendar import monthrange
@@ -25,44 +26,60 @@ from app.services.crawler_service import (
 bp = Blueprint("crawler", __name__, url_prefix="/crawler")
 
 # ── Captcha state — keyed by account_id (None = legacy single-account) ───────
-# Each entry: { "lock": Lock, "event": Event, "answer": str, "account_name": str }
 _captcha_states: dict = {}
-_captcha_states_lock = threading.Lock()  # guards the dict itself
+_captcha_states_lock = threading.Lock()
 
-# ── In-process auto-sync state ────────────────────────────────────────────────
-# Tracks whether THIS process is actively running a chunk-chain thread right now.
-# Distinct from the persisted scheduler config: the scheduler fires once a day
-# automatically, while this flag reflects the live thread looping through chunks.
-_auto_sync_lock:   threading.Lock  = threading.Lock()
-_auto_sync_active: bool            = False
-_auto_sync_stop:   threading.Event = threading.Event()
+# ── In-process auto-sync state — per account ──────────────────────────────────
+_auto_sync_lock:        threading.Lock = threading.Lock()
+_auto_sync_active:      dict = {}
+_auto_sync_stop_events: dict = {}
 
 
 # ── State helpers ─────────────────────────────────────────────────────────────
 
-def _set_auto_sync(active: bool, cfg: dict | None = None) -> None:
-    """
-    Update the in-process flag and broadcast the new state to all connected clients.
+def _state_key(account_id: Optional[int]):
+    return account_id if account_id is not None else "_legacy"
 
-    ``cfg`` is forwarded in the socket payload so the UI can display the preset
-    and next-run time without issuing a separate /api/status poll.
-    """
-    global _auto_sync_active
+
+def _get_stop_event(account_id: Optional[int]) -> threading.Event:
+    key = _state_key(account_id)
     with _auto_sync_lock:
-        _auto_sync_active = active
-        if not active:
-            _auto_sync_stop.clear()
-    socketio.emit("auto_sync_state", {"active": active, "config": cfg or {}})
-    logger.info("Auto-sync state → {}", active)
+        ev = _auto_sync_stop_events.get(key)
+        if ev is None:
+            ev = threading.Event()
+            _auto_sync_stop_events[key] = ev
+        return ev
 
 
-def get_auto_sync_state() -> bool:
+def _set_auto_sync(active: bool, cfg: dict | None = None, account_id: Optional[int] = None) -> None:
+    key = _state_key(account_id)
     with _auto_sync_lock:
-        return _auto_sync_active
+        _auto_sync_active[key] = active
+        if active:
+            _auto_sync_stop_events.setdefault(key, threading.Event()).clear()
+    socketio.emit("auto_sync_state", {
+        "active":     active,
+        "config":     cfg or {},
+        "account_id": account_id,
+    })
+    logger.info("Auto-sync state (account_id={}) → {}", account_id, active)
+
+
+def get_auto_sync_state(account_id: Optional[int] = None) -> bool:
+    with _auto_sync_lock:
+        if account_id is not None:
+            return _auto_sync_active.get(_state_key(account_id), False)
+        return any(_auto_sync_active.values())
+
+
+def _stop_all_auto_sync_chains() -> None:
+    with _auto_sync_lock:
+        events = list(_auto_sync_stop_events.values())
+    for ev in events:
+        ev.set()
 
 
 def _get_or_create_captcha_state(account_id, account_name: str = "") -> dict:
-    """Return (or create) the captcha state dict for a given account_id."""
     with _captcha_states_lock:
         if account_id not in _captcha_states:
             _captcha_states[account_id] = {
@@ -75,11 +92,43 @@ def _get_or_create_captcha_state(account_id, account_name: str = "") -> dict:
 
 
 def get_captcha_callbacks(account_id=None, account_name: str = ""):
-    """Return (event, get_answer_fn) for a specific account."""
     state = _get_or_create_captcha_state(account_id, account_name)
     with state["lock"]:
         state["event"].clear()
     return state["event"], lambda: state["answer"]
+
+
+# ── emit_fn factory ───────────────────────────────────────────────────────────
+
+def _make_emit_fn(job_id: int, account_id: Optional[int]):
+    """
+    Trả về emit_fn thông minh:
+      - Nếu message là JSON marker ``{"__progress__": true, ...}``
+        → emit socket event ``crawler_progress`` (frontend dùng để tính %)
+      - Còn lại → emit ``crawler_log`` như cũ
+    """
+    def _emit(msg: str) -> None:
+        if msg and msg.startswith('{"__progress__"'):
+            try:
+                data = json.loads(msg)
+                if data.get("__progress__"):
+                    socketio.emit("crawler_progress", {
+                        "total":      data["total"],
+                        "done":       data["done"],
+                        "failed":     data["failed"],
+                        "skipped":    data.get("skipped", 0),
+                        "job_id":     job_id,
+                        "account_id": account_id,
+                    })
+                    return
+            except (json.JSONDecodeError, KeyError):
+                pass
+        socketio.emit("crawler_log", {
+            "message":    msg,
+            "job_id":     job_id,
+            "account_id": account_id,
+        })
+    return _emit
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -91,11 +140,6 @@ def _get_credentials() -> Tuple[str, str]:
 
 
 def _split_into_chunks(start_date: date, end_date: date) -> List[Tuple[str, str]]:
-    """
-    Split [start_date, end_date] into per-calendar-month chunks.
-    Each chunk spans exactly one calendar month so day counts are always correct.
-    Returns list of (start_str, end_str) in DD/MM/YYYY format.
-    """
     chunks: List[Tuple[str, str]] = []
     cursor = start_date
     while cursor <= end_date:
@@ -110,7 +154,6 @@ def _split_into_chunks(start_date: date, end_date: date) -> List[Tuple[str, str]
 
 
 def _range_from_months_back(months_back: int) -> Tuple[date, date]:
-    """Return (start_date, today) going back ``months_back`` full calendar months."""
     today = date.today()
     y, m = today.year, today.month
     for _ in range(months_back):
@@ -127,12 +170,10 @@ def _compute_auto_sync_chunks(months_back: int = 2) -> List[Tuple[str, str]]:
 
 
 def _parse_date_param(s: str) -> date:
-    """Parse YYYY-MM-DD from an API query/body parameter."""
     return date.fromisoformat(s)
 
 
 def _chunks_from_iso_range(start_iso: str, end_iso: str) -> List[Tuple[str, str]]:
-    """Build month-chunks from ISO-date strings (output of ``_resolve_date_range``)."""
     return _split_into_chunks(
         date.fromisoformat(start_iso),
         date.fromisoformat(end_iso),
@@ -171,26 +212,9 @@ def _launch_chunks(
     is_auto_sync: bool = False,
     auto_sync_cfg: dict | None = None,
 ) -> dict:
-    """
-    Spin up a daemon thread that runs each chunk sequentially, waiting for the
-    crawler engine to finish before starting the next one.
-
-    Parameters
-    ----------
-    chunks:
-        List of (start_dd/mm/yyyy, end_dd/mm/yyyy) tuples.
-    app:
-        The Flask application object (for app_context inside the thread).
-    is_auto_sync:
-        When True the thread manages the in-process _auto_sync_active flag and
-        respects _auto_sync_stop so the chain can be cancelled mid-flight.
-    auto_sync_cfg:
-        The saved config dict emitted to clients alongside state changes.
-        Keeps socket payloads consistent without extra /api/status polls.
-    """
-    # Resolve credentials: explicit params > account DB > env vars
-    _username = username
-    _password = password
+    # Resolve credentials
+    _username     = username
+    _password     = password
     _account_name = ""
     if not _username and account_id is not None:
         try:
@@ -217,84 +241,96 @@ def _launch_chunks(
     def _run_chain():
         import time
 
+        stop_event = _get_stop_event(account_id) if is_auto_sync else None
+
         if is_auto_sync:
-            _set_auto_sync(True, cfg=auto_sync_cfg)
+            _set_auto_sync(True, cfg=auto_sync_cfg, account_id=account_id)
 
         try:
-            for i, (sd, ed) in enumerate(chunks):
-                if is_auto_sync and _auto_sync_stop.is_set():
-                    logger.info("Auto-sync cancelled before chunk {}", i + 1)
+            # Wait for the engine to be free
+            while True:
+                if is_auto_sync and stop_event.is_set():
                     break
 
-                # ── Wait for the engine to be free ────────────────────────────
-                while True:
-                    if is_auto_sync and _auto_sync_stop.is_set():
-                        break
-                    with app.app_context():
-                        status = get_crawl_status()
-                    if not status["is_running"]:
-                        break
-                    time.sleep(3)
-
-                if is_auto_sync and _auto_sync_stop.is_set():
-                    logger.info("Auto-sync cancelled while waiting for slot.")
-                    break
-
-                # ── Create DB job record ──────────────────────────────────────
                 with app.app_context():
-                    job = CrawlJobRepository.create(start_date=sd, end_date=ed, account_id=account_id)
+                    status = get_crawl_status()
 
-                def emit_fn(msg, _jid=job.id):
-                    socketio.emit("crawler_log", {"message": msg, "job_id": _jid})
+                if not status["is_running"]:
+                    break
 
-                def emit_captcha_fn(b64, _jid=job.id, _aid=account_id, _aname=_account_name):
-                    socketio.emit("crawler_captcha", {
-                        "image":        b64,
-                        "job_id":       _jid,
-                        "account_id":   _aid,
-                        "account_name": _aname,
-                    })
+                time.sleep(3)
 
-                captcha_event, get_captcha_answer = get_captcha_callbacks(
-                    account_id=account_id, account_name=_account_name
+            if is_auto_sync and stop_event.is_set():
+                logger.info(
+                    "Auto-sync (account_id={}) cancelled while waiting for slot.",
+                    account_id,
                 )
+                return
 
-                # ── Launch the async engine ───────────────────────────────────
-                ok = start_crawl(
-                    job_id=job.id,
-                    username=_username,
-                    password=_password,
-                    start_date=sd,
-                    end_date=ed,
+            with app.app_context():
+                job = CrawlJobRepository.create(
+                    start_date=chunks[0][0],
+                    end_date=chunks[-1][1],
                     account_id=account_id,
-                    emit_fn=emit_fn,
-                    emit_captcha_fn=emit_captcha_fn,
-                    captcha_event=captcha_event,
-                    get_captcha_answer=get_captcha_answer,
-                    app=app,
                 )
-                if not ok:
-                    logger.warning(
-                        "Could not start chunk {}/{}: {} → {}", i + 1, len(chunks), sd, ed
-                    )
-                else:
-                    logger.info(
-                        "Chunk {}/{} started: {} → {}", i + 1, len(chunks), sd, ed
-                    )
 
-                time.sleep(5)
+            emit_fn = _make_emit_fn(job.id, account_id)
+
+            def emit_captcha_fn(
+                b64,
+                _jid=job.id,
+                _aid=account_id,
+                _aname=_account_name,
+            ):
+                socketio.emit(
+                    "crawler_captcha",
+                    {
+                        "image": b64,
+                        "job_id": _jid,
+                        "account_id": _aid,
+                        "account_name": _aname,
+                    },
+                )
+
+            captcha_event, get_captcha_answer = get_captcha_callbacks(
+                account_id=account_id,
+                account_name=_account_name,
+            )
+
+            ok = start_crawl(
+                job_id=job.id,
+                username=_username,
+                password=_password,
+                chunks=chunks,      # truyền toàn bộ 6 tháng 1 lần
+                account_id=account_id,
+                emit_fn=emit_fn,
+                emit_captcha_fn=emit_captcha_fn,
+                captcha_event=captcha_event,
+                get_captcha_answer=get_captcha_answer,
+                app=app,
+            )
+
+            if not ok:
+                logger.warning(
+                    "Could not start crawl: {} → {}",
+                    chunks[0][0],
+                    chunks[-1][1],
+                )
+            else:
+                logger.info(
+                    "Started crawl: {} → {}",
+                    chunks[0][0],
+                    chunks[-1][1],
+                )
 
         finally:
             if is_auto_sync:
-                # Chain finished (all chunks done or cancelled).
-                # Emit disabled state but keep the scheduler config intact on
-                # disk — the daily 21:19 APScheduler job survives process state.
-                _set_auto_sync(False, cfg=load_auto_sync_config())
+                _set_auto_sync(False, cfg=load_auto_sync_config(), account_id=account_id)
 
     t = threading.Thread(
         target=_run_chain,
         daemon=True,
-        name="auto-sync-chain" if is_auto_sync else "chunk-chain",
+        name=f"auto-sync-chain-{account_id}" if is_auto_sync else "chunk-chain",
     )
     t.start()
     return {"ok": True, "chunks": [{"start": s, "end": e} for s, e in chunks]}
@@ -304,21 +340,6 @@ def _launch_chunks(
 
 @bp.post("/api/start")
 def api_start():
-    """
-    Start a crawl job.
-
-    Supported modes (``mode`` field in JSON body):
-
-    Auto-sync modes — persist config, register/update APScheduler daily job at
-    21:19 ICT, run immediately, and re-run automatically every day:
-      "2m"          Last 2 calendar months → today
-      "6m"          Last 6 calendar months → today
-      "1y"          Last 12 calendar months → today
-      "custom_date" Explicit start_date / end_date (YYYY-MM-DD)
-
-    Manual mode — one-off crawl, disables auto-sync scheduler:
-      "range"       start_month / start_year / end_month / end_year integers
-    """
     data = request.get_json(force=True, silent=True) or {}
     app  = current_app._get_current_object()
     mode = data.get("mode", "range")
@@ -327,10 +348,6 @@ def api_start():
 
     # ── Auto-sync modes ───────────────────────────────────────────────────────
     if mode in AUTO_SYNC_MODES:
-        # Guard: don't allow a second concurrent chunk-chain.
-        if get_auto_sync_state():
-            return jsonify({"ok": False, "error": "Auto-sync is already running."}), 409
-
         if mode == "custom_date":
             try:
                 start_d = _parse_date_param(data["start_date"])
@@ -345,42 +362,55 @@ def api_start():
                 ), 400
             start_iso, end_iso = data["start_date"], data["end_date"]
         else:
-            # Derive the ISO date range the same way the scheduler would, so
-            # the immediate run and the daily scheduled runs are always consistent.
             start_iso, end_iso = _resolve_date_range({"preset": mode})
 
-        # Persist config to disk and register / refresh the daily scheduled job.
         try:
             run_hour   = max(0, min(23, int(data.get("run_hour",   19))))
             run_minute = max(0, min(59, int(data.get("run_minute",  0))))
         except (TypeError, ValueError):
             run_hour, run_minute = 19, 0
 
-        account_ids = data.get("account_ids") or []
+        account_schedules = data.get("account_schedules")
+        if not account_schedules:
+            account_ids = data.get("account_ids") or []
+            if account_ids:
+                account_schedules = [
+                    {"account_id": aid, "run_hour": run_hour, "run_minute": run_minute}
+                    for aid in account_ids
+                ]
+            else:
+                account_schedules = [
+                    {"account_id": None, "run_hour": run_hour, "run_minute": run_minute}
+                ]
+
+        busy = [
+            s.get("account_id") for s in account_schedules
+            if get_auto_sync_state(s.get("account_id"))
+        ]
+        if busy:
+            return jsonify({
+                "ok": False,
+                "error": f"Auto-sync đang chạy cho account_id(s): {busy}",
+            }), 409
+
         saved_cfg = enable_auto_sync(
             preset=mode,
             start_date=start_iso if mode == "custom_date" else None,
             end_date=end_iso     if mode == "custom_date" else None,
-            run_hour=run_hour,
-            run_minute=run_minute,
-            account_ids=account_ids,
+            account_schedules=account_schedules,
             app=app,
         )
 
-        # Chỉ đăng ký lịch, KHÔNG chạy ngay. Scheduler sẽ kích hoạt đúng giờ.
         socketio.emit("auto_sync_state", {"active": False, "config": saved_cfg})
         result = {"ok": True, "chunks": [], "scheduled_only": True}
 
     # ── Manual range mode ─────────────────────────────────────────────────────
     else:
-        # Cancel any live auto-sync chain first.
         if get_auto_sync_state():
-            _auto_sync_stop.set()
-            _set_auto_sync(False)
+            _stop_all_auto_sync_chains()
             stop_crawl()
             logger.info("Auto-sync cancelled by manual range crawl.")
 
-        # Disable the persisted scheduler so the 21:19 job won't fire unexpectedly.
         disable_auto_sync()
         socketio.emit("auto_sync_state", {"active": False, "config": None})
 
@@ -404,9 +434,8 @@ def api_start():
         chunks  = _split_into_chunks(start_d, end_d)
         account_ids = data.get("account_ids") or []
         if not account_ids:
-            # fallback: single account or legacy env creds
             account_ids = [None]
-        # Launch each account as a separate parallel chain
+
         results = []
         for aid in account_ids:
             r = _launch_chunks(chunks, app, account_id=aid, is_auto_sync=False)
@@ -420,11 +449,15 @@ def api_start():
         return jsonify(result), 400
 
     if result.get("scheduled_only"):
+        sched_lines = ", ".join(
+            f"#{s['account_id'] if s['account_id'] is not None else '-'} @ {s['run_hour']:02d}:{s['run_minute']:02d}"
+            for s in saved_cfg["account_schedules"]
+        )
         return jsonify({
             **result,
             "total_chunks": 0,
             "mode": mode,
-            "message": f"Auto-sync đã được lên lịch lúc {run_hour:02d}:{run_minute:02d} ICT. Sẽ tự chạy đúng giờ.",
+            "message": f"Auto-sync đã được lên lịch ({sched_lines} ICT). Sẽ tự chạy đúng giờ.",
         })
 
     return jsonify({**result, "total_chunks": len(result["chunks"]), "mode": mode})
@@ -434,24 +467,14 @@ def api_start():
 
 @bp.post("/api/stop")
 def api_stop():
-    """
-    Stop the running crawl engine AND disable the auto-sync scheduler.
-
-    This is the "full stop" action.  Use /api/auto-sync/disable if you only
-    want to turn off the scheduler while letting the current job finish.
-    """
     auto_was_active = get_auto_sync_state()
     if auto_was_active:
-        _auto_sync_stop.set()
-        _set_auto_sync(False)
+        _stop_all_auto_sync_chains()
 
-    # Support stopping a specific account or all
     aid_raw = (request.get_json(force=True, silent=True) or {}).get("account_id")
     account_id_stop = int(aid_raw) if aid_raw is not None else None
     stopped = stop_crawl(account_id=account_id_stop)
 
-    # Disable the persisted scheduler config (even if no in-process chain was
-    # running, the 21:19 job should not fire after an explicit stop).
     persisted_cfg = load_auto_sync_config()
     if persisted_cfg.get("enabled"):
         disable_auto_sync()
@@ -473,17 +496,8 @@ def api_stop():
 
 @bp.post("/api/auto-sync/disable")
 def api_disable_auto_sync():
-    """
-    Turn off the daily scheduler without stopping an already-running crawl job.
-
-    Useful when the user wants to cancel tomorrow's automatic run but is happy
-    to let tonight's job complete normally.
-    """
-    # Stop the in-process chain if it's still looping between chunks.
     if get_auto_sync_state():
-        _auto_sync_stop.set()
-        _set_auto_sync(False)
-
+        _stop_all_auto_sync_chains()
     disable_auto_sync()
     socketio.emit("auto_sync_state", {"active": False, "config": None})
     logger.info("Auto-sync disabled via /api/auto-sync/disable.")
@@ -494,14 +508,6 @@ def api_disable_auto_sync():
 
 @bp.get("/api/status")
 def api_status():
-    """
-    Return a merged status snapshot.
-
-    ``get_crawl_status()`` reflects the persisted scheduler config (disk);
-    ``get_auto_sync_state()`` reflects whether a chunk-chain thread is running
-    right now.  Both sources are merged so the client always sees the most
-    accurate picture.
-    """
     status = get_crawl_status()
     status["auto_sync_active"] = (
         get_auto_sync_state() or status.get("auto_sync_active", False)
@@ -528,7 +534,6 @@ def api_captcha_submit():
     if not answer:
         return jsonify({"ok": False, "error": "Empty answer"}), 400
 
-    # account_id in body — None means legacy single-account
     aid_raw    = data.get("account_id")
     account_id = int(aid_raw) if aid_raw is not None else None
 
@@ -536,7 +541,6 @@ def api_captcha_submit():
         state = _captcha_states.get(account_id)
 
     if state is None:
-        # Fallback: answer any waiting state (e.g. if account_id not sent)
         with _captcha_states_lock:
             states = list(_captcha_states.values())
         state = next((s for s in states if not s["event"].is_set()), None)
@@ -564,15 +568,7 @@ def api_captcha_refresh():
 
 @bp.get("/api/chunks-preview")
 def api_chunks_preview():
-    """
-    Preview which month-chunks a given date range would produce.
-
-    Supports three calling conventions:
-      1. ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD   (date picker)
-      2. ?months_back=N                                (preset buttons)
-      3. ?start_month=M&start_year=Y&end_month=M&end_year=Y  (legacy selectors)
-    """
-    # ── Convention 1: explicit ISO date range ─────────────────────────────────
+    # Convention 1: explicit ISO date range
     sd_raw = request.args.get("start_date")
     ed_raw = request.args.get("end_date")
     if sd_raw and ed_raw:
@@ -584,7 +580,7 @@ def api_chunks_preview():
         chunks = _split_into_chunks(start_d, end_d)
         return jsonify({"chunks": [{"start": s, "end": e} for s, e in chunks]})
 
-    # ── Convention 2: months_back preset ─────────────────────────────────────
+    # Convention 2: months_back preset
     mb_raw = request.args.get("months_back")
     if mb_raw:
         try:
@@ -599,7 +595,7 @@ def api_chunks_preview():
             "range_end":   end_d.strftime("%d/%m/%Y"),
         })
 
-    # ── Convention 3: legacy month/year selectors ─────────────────────────────
+    # Convention 3: legacy month/year selectors
     try:
         start_month = int(request.args.get("start_month", 0))
         start_year  = int(request.args.get("start_year",  0))
@@ -617,7 +613,8 @@ def api_chunks_preview():
     chunks  = _split_into_chunks(start_d, end_d)
     return jsonify({"chunks": [{"start": s, "end": e} for s, e in chunks]})
 
-# ─────────────────────────────────────────────────────── GDT Accounts API
+
+# ─────────────────────────────────────────────────────── GDT Accounts API ────
 
 @bp.get("/api/accounts")
 def api_accounts_list():

@@ -139,7 +139,6 @@ invoice-crawler/
 │   ├── routes/              # Flask blueprints
 │   ├── templates/           # Jinja2 HTML templates
 │   └── utils/               # Helpers, retry, logging
-├── downloads/               # Raw portal downloads
 ├── invoices/                # Structured invoice files
 ├── exports/                 # Generated Excel reports
 ├── logs/                    # Application logs + screenshots

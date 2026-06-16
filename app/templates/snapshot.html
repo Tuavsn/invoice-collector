@@ -125,8 +125,19 @@
         <option value="sale_pos"          {% if invoice_category=='sale_pos'          %}selected{% endif %}>Bán ra (POS)</option>
       </select>
       {% if not active_batch %}
-      <input class="snap-input" type="date" name="start_date" value="{{ start_date }}" title="Từ ngày">
-      <input class="snap-input" type="date" name="end_date"   value="{{ end_date }}"   title="Đến ngày">
+      <input class="snap-input"
+        type="text"
+        id="start_date"
+        name="start_date"
+        value="{{ start_date }}"
+        title="Từ ngày">
+
+      <input class="snap-input"
+        type="text"
+        id="end_date"
+        name="end_date"
+        value="{{ end_date }}"
+        title="Đến ngày">
       {% endif %}
       <button class="snap-btn secondary" type="submit">Lọc</button>
       <a class="snap-btn ghost" href="{{ url_for('snapshot.index') if not active_batch else url_for('snapshot.batch_detail', batch_id=active_batch.id) }}">Reset</a>
@@ -880,6 +891,11 @@ function onMonthChange() {
 
 function openChotModal() {
   if (selectedIds.size === 0) return;
+  const params = new URLSearchParams(window.location.search);
+  if (!params.get('account_id')) {
+    showToast('Vui lòng chọn công ty trước khi chốt batch.', 'err');
+    return;
+  }
   document.getElementById('modal-count-desc').textContent = `${selectedIds.size} hóa đơn`;
   document.getElementById('inp-batch-note').value = '';
   document.getElementById('existing-batch-info').style.display = 'none';
@@ -946,6 +962,10 @@ async function deleteBatch(id, label, evt) {
 // ── Export ────────────────────────────────────────────────────
 async function exportNew() {
   const params = new URLSearchParams(window.location.search);
+  if (!params.get('account_id')) {
+    showToast('Vui lòng chọn công ty trước khi xuất Excel.', 'err');
+    return;
+  }
   const body   = {
     search:           params.get('search')           || null,
     invoice_category: params.get('invoice_category') || null,
@@ -987,6 +1007,26 @@ document.addEventListener('keydown', e => {
 document.addEventListener('DOMContentLoaded', () => {
   buildSnapColPicker();
   applySnapColVisibility();
+
+  if (document.getElementById('start_date')) {
+    flatpickr("#start_date", {
+      locale: "vn",
+      dateFormat: "Y-m-d",
+      altInput: true,
+      altFormat: "d/m/Y",
+      allowInput: true
+    });
+  }
+
+  if (document.getElementById('end_date')) {
+    flatpickr("#end_date", {
+      locale: "vn",
+      dateFormat: "Y-m-d",
+      altInput: true,
+      altFormat: "d/m/Y",
+      allowInput: true
+    });
+  }
 });
 </script>
 {% endblock %}

@@ -21,14 +21,19 @@ _NS = {"ds": "http://www.w3.org/2000/09/xmldsig#"}
 # ─────────────────────────────────────────────────────────────── helpers
 
 def _parse_amount(raw: Any) -> float:
-    """Chuyển chuỗi số (có thể có dấu chấm/phẩy phân cách) sang float."""
     if raw is None:
         return 0.0
+
     if isinstance(raw, (int, float)):
         return float(raw)
-    cleaned = re.sub(r"[^\d\-.]", "", str(raw).replace(",", "."))
+
+    s = str(raw).strip()
+
+    if not s or s in ("-", "—", "N/A"):
+        return 0.0
+
     try:
-        return float(cleaned)
+        return float(s)
     except ValueError:
         return 0.0
 

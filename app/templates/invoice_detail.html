@@ -316,7 +316,7 @@ function autoResizeFrame(frame) {
     if (!doc || !doc.body) return;
     frame.style.width  = doc.body.scrollWidth  + 'px';
     frame.style.height = doc.body.scrollHeight + 'px';
-  } catch (e) { console.error(e); }
+  } catch (e) {}
 }
 
 // ── Inline edit ─────────────────────────────────────────────────

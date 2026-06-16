@@ -152,6 +152,10 @@ class ExcelService:
     ) -> Path:
         Config.EXPORT_PATH.mkdir(parents=True, exist_ok=True)
 
+        company = _get_company_info(account_id=account_id)
+        if not company["name"] and not company["tax_code"]:
+            raise ValueError("Vui lòng chọn công ty trước khi xuất Excel.")
+
         invoices = InvoiceRepository.get_for_export(
             start_date=_parse_date(start_date),
             end_date=_parse_date(end_date),
@@ -183,13 +187,20 @@ class ExcelService:
         return dest
 
     @staticmethod
-    def export_from_list(invoices: List[Invoice], label: str = "Hóa đơn") -> Path:
+    def export_from_list(
+        invoices: List[Invoice],
+        label: str = "Hóa đơn",
+        account_id: Optional[int] = None,
+    ) -> Path:
         Config.EXPORT_PATH.mkdir(parents=True, exist_ok=True)
 
         mua_vao = [i for i in invoices if not (i.invoice_category or "").startswith("sale_")]
         ban_ra  = [i for i in invoices if     (i.invoice_category or "").startswith("sale_")]
 
-        company   = _get_company_info()
+        company = _get_company_info(account_id=account_id)
+        if not company["name"] and not company["tax_code"]:
+            raise ValueError("Vui lòng chọn công ty trước khi xuất Excel.")
+
         safe      = _safe_sheet(label)
         dest      = Config.EXPORT_PATH / f"snapshot_{_safe_filename(label)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 

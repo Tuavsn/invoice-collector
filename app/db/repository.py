@@ -20,12 +20,13 @@ from app.extensions import db
 class InvoiceRepository:
     @staticmethod
     def upsert(data: Dict[str, Any]) -> Invoice:
-        """Insert or update an invoice identified by invoice_no + invoice_symbol."""
         existing = (
             db.session.query(Invoice)
             .filter_by(
                 invoice_no=data["invoice_no"],
                 invoice_symbol=data.get("invoice_symbol"),
+                invoice_form=data.get("invoice_form"),
+                invoice_category=data.get("invoice_category"),
             )
             .first()
         )
@@ -58,19 +59,22 @@ class InvoiceRepository:
         invoice_no: str,
         invoice_symbol: Optional[str] = None,
         invoice_form: Optional[str] = None,
+        invoice_category: Optional[str] = None,
+        total_amount: Optional[float] = None,
     ) -> Optional[Invoice]:
         """
-        Lookup by (invoice_no, invoice_symbol, invoice_form).
-
-        Dùng để check skip chính xác hơn get_by_invoice_no — tránh false-positive
-        khi cùng invoice_no nhưng khác ký hiệu / mẫu (ví dụ hóa đơn điều chỉnh).
-        Trả về Invoice nếu tìm thấy, None nếu chưa có.
+        Lookup by (invoice_no, invoice_symbol, invoice_form, invoice_category).
+        ...
         """
         query = db.session.query(Invoice).filter_by(invoice_no=invoice_no)
         if invoice_symbol is not None:
             query = query.filter_by(invoice_symbol=invoice_symbol)
         if invoice_form is not None:
             query = query.filter_by(invoice_form=invoice_form)
+        if invoice_category is not None:
+            query = query.filter_by(invoice_category=invoice_category)
+        if total_amount is not None:
+            query = query.filter_by(total_amount=total_amount)
         return query.first()
 
     @staticmethod

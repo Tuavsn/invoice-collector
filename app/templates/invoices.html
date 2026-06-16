@@ -35,14 +35,20 @@
 
         <div class="col-md-2">
           <label class="form-label">Từ ngày</label>
-          <input type="date" name="start_date" class="form-control"
-                 value="{{ start_date }}" />
+          <input type="text"
+                id="start_date"
+                name="start_date"
+                class="form-control"
+                value="{{ start_date }}" />
         </div>
 
         <div class="col-md-2">
           <label class="form-label">Đến ngày</label>
-          <input type="date" name="end_date" class="form-control"
-                 value="{{ end_date }}" />
+          <input type="text"
+                id="end_date"
+                name="end_date"
+                class="form-control"
+                value="{{ end_date }}" />
         </div>
 
         <div class="col-md-1">
@@ -446,6 +452,24 @@ function colPickerAll(checked) {
 document.addEventListener('DOMContentLoaded', () => {
   buildColPicker();
   applyColVisibility();
+
+  if (document.getElementById('start_date')) {
+    flatpickr("#start_date", {
+        locale: "vn",
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: true
+    });
+
+    flatpickr("#end_date", {
+        locale: "vn",
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: true
+    });
+  }
 });
 
 // ── Edit modal ───────────────────────────────────────────────────────────────
@@ -464,7 +488,6 @@ function openEdit(btn) {
     document.getElementById('edit-hd-ban-ra').value        = inv.hd_ban_ra_tuong_ung || '';
     new bootstrap.Modal(document.getElementById('editModal')).show();
   } catch (e) {
-    console.error(e);
     alert('Không đọc được dữ liệu hóa đơn');
   }
 }
@@ -505,6 +528,17 @@ async function exportExcel() {
   const btn      = document.getElementById('btn-export');
   const statusEl = document.getElementById('export-status');
   const params   = new URLSearchParams(window.location.search);
+
+  if (!params.get('account_id')) {
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = `
+      <div class="alert d-flex align-items-center gap-2"
+           style="background:var(--warning-bg,#fffbeb); border:1px solid var(--warning-border,#fde68a); color:#92400e;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        Vui lòng chọn <strong>tài khoản công ty</strong> trước khi xuất Excel.
+      </div>`;
+    return;
+  }
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Đang tạo…';

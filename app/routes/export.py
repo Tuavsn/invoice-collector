@@ -35,6 +35,8 @@ def api_excel():
             account_id=account_id,
         )
         return jsonify({"ok": True, "file": path.name, "path": str(path)})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400   # ← lỗi người dùng → 400
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 

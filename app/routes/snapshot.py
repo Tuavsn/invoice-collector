@@ -14,7 +14,7 @@ Routes:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
@@ -30,7 +30,8 @@ bp = Blueprint("snapshot", __name__, url_prefix="/snapshot")
 def index():
     """Trang chính: danh sách HĐ mới + sidebar danh sách batch đã chốt."""
     search        = request.args.get("search",           "").strip() or None
-    category      = request.args.get("invoice_category", "").strip() or None
+    # Loại hóa đơn — hỗ trợ chọn nhiều (checkbox), nhận dạng list từ query string
+    category_list = [v.strip() for v in request.args.getlist("invoice_category") if v.strip()]
     start_date    = request.args.get("start_date",       "").strip() or None
     end_date      = request.args.get("end_date",         "").strip() or None
     account_id    = _parse_int(request.args.get("account_id", ""))
@@ -40,7 +41,7 @@ def index():
 
     pagination = SnapshotRepository.get_new_invoices(
         page=1, per_page=5000,
-        search=search, invoice_category=category,
+        search=search, invoice_category=category_list or None,
         start_date=start_dt, end_date=end_dt,
         account_id=account_id,
     )
@@ -55,7 +56,7 @@ def index():
         new_count=new_count,
         accounts=accounts,
         search=search or "",
-        invoice_category=category or "",
+        invoice_category_list=category_list,
         start_date=start_date or "",
         end_date=end_date or "",
         account_id=account_id or "",
@@ -69,13 +70,13 @@ def batch_detail(batch_id: int):
     if not batch:
         abort(404)
 
-    search   = request.args.get("search",           "").strip() or None
-    category = request.args.get("invoice_category", "").strip() or None
-    account_id = _parse_int(request.args.get("account_id", ""))
+    search        = request.args.get("search",           "").strip() or None
+    category_list = [v.strip() for v in request.args.getlist("invoice_category") if v.strip()]
+    account_id    = _parse_int(request.args.get("account_id", ""))
 
     pagination = SnapshotRepository.get_batch_invoices(
         batch_id=batch_id, page=1, per_page=5000,
-        search=search, invoice_category=category,
+        search=search, invoice_category=category_list or None,
     )
     batches   = SnapshotRepository.get_all(account_id=account_id)
     new_count = SnapshotRepository.count_new(account_id=account_id)
@@ -89,7 +90,7 @@ def batch_detail(batch_id: int):
         accounts=accounts,
         active_batch=batch.to_dict(),
         search=search or "",
-        invoice_category=category or "",
+        invoice_category_list=category_list,
         start_date="",
         end_date="",
         account_id=account_id or "",
@@ -113,15 +114,15 @@ def api_stats():
 @bp.get("/api/new")
 def api_new():
     """AJAX endpoint — trả JSON hóa đơn mới để render bảng phía client."""
-    search   = request.args.get("search",           "").strip() or None
-    category = request.args.get("invoice_category", "").strip() or None
+    search        = request.args.get("search",           "").strip() or None
+    category_list = [v.strip() for v in request.args.getlist("invoice_category") if v.strip()]
     start_dt = _parse_dt(request.args.get("start_date", ""))
     end_dt   = _parse_dt(request.args.get("end_date",   ""))
     account_id = _parse_int(request.args.get("account_id", ""))
 
     pg = SnapshotRepository.get_new_invoices(
         page=1, per_page=5000,
-        search=search, invoice_category=category,
+        search=search, invoice_category=category_list or None,
         start_date=start_dt, end_date=end_dt,
         account_id=account_id,
     )
@@ -209,15 +210,16 @@ def api_delete_batch(batch_id: int):
 @bp.post("/api/export/new")
 def api_export_new():
     """Export Excel toàn bộ HĐ mới (có thể kết hợp filter)."""
-    data     = request.get_json(force=True, silent=True) or {}
-    search   = (data.get("search")           or "").strip() or None
-    category = (data.get("invoice_category") or "").strip() or None
+    data         = request.get_json(force=True, silent=True) or {}
+    search       = (data.get("search")           or "").strip() or None
+    category_raw = data.get("invoice_category")
+    category_list = _normalize_category_list(category_raw)
     start_dt = _parse_dt(data.get("start_date", ""))
     end_dt   = _parse_dt(data.get("end_date",   ""))
     account_id = _parse_int(str(data.get("account_id") or ""))
 
     invoices = SnapshotRepository.get_new_for_export(
-        search=search, invoice_category=category,
+        search=search, invoice_category=category_list or None,
         start_date=start_dt, end_date=end_dt,
         account_id=account_id,
     )
@@ -279,6 +281,17 @@ def _parse_int(value: Optional[str]) -> Optional[int]:
         return int(value) if value else None
     except (TypeError, ValueError):
         return None
+
+
+def _normalize_category_list(value) -> List[str]:
+    """Chuẩn hoá invoice_category nhận từ JSON body — hỗ trợ cả list và string đơn (tương thích cũ)."""
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    return []
 
 
 def _invoice_summary(inv) -> dict:

@@ -22,7 +22,8 @@ def index():
     end_date       = request.args.get("end_date",         "").strip() or None
     ghi_chu        = request.args.get("ghi_chu",          "").strip() or None
     thang_ke_khai  = request.args.get("thang_ke_khai",    "").strip() or None
-    invoice_category = request.args.get("invoice_category", "").strip() or None
+    # Loại hóa đơn — hỗ trợ chọn nhiều (checkbox), nhận dạng list từ query string
+    invoice_category_list = [v.strip() for v in request.args.getlist("invoice_category") if v.strip()]
     account_id_str   = request.args.get("account_id",       "").strip() or None
     account_id       = int(account_id_str) if account_id_str and account_id_str.isdigit() else None
 
@@ -37,7 +38,7 @@ def index():
         end_date=end_date,
         ghi_chu=ghi_chu,
         thang_ke_khai=thang_ke_khai,
-        invoice_category=invoice_category,
+        invoice_category=invoice_category_list or None,
         account_id=account_id,
     )
 
@@ -50,7 +51,7 @@ def index():
         end_date=end_date           or "",
         ghi_chu=ghi_chu             or "",
         thang_ke_khai=thang_ke_khai or "",
-        invoice_category=invoice_category or "",
+        invoice_category_list=invoice_category_list,
         account_id=account_id_str or "",
     )
 

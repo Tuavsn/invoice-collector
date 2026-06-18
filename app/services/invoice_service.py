@@ -77,8 +77,8 @@ class InvoiceService:
         return InvoiceRepository.stats()
 
     @staticmethod
-    def get_monthly_summary() -> List[Dict[str, Any]]:
-        return InvoiceRepository.monthly_summary()
+    def get_account_stats():
+        return InvoiceRepository.account_breakdown()
 
 
 def _parse_dt(value: str) -> Optional[datetime]:

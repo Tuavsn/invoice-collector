@@ -109,8 +109,8 @@ def setup_logging() -> None:
         log = logging.getLogger(name)
         log.handlers = [intercept_handler]
         log.propagate = False
-        log.setLevel(logging.INFO)
+        log.setLevel(logging.DEBUG)
 
     root_logger = logging.getLogger()
     root_logger.handlers = [intercept_handler]
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG)

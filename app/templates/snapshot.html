@@ -117,13 +117,31 @@
 
       <input class="snap-input" type="text" name="search"
              placeholder="Tìm số HĐ, tên, MST…" value="{{ search }}">
-      <select class="snap-select" name="invoice_category">
-        <option value="">Tất cả loại</option>
-        <option value="purchase_einvoice" {% if invoice_category=='purchase_einvoice' %}selected{% endif %}>Mua vào (e-invoice)</option>
-        <option value="purchase_pos"      {% if invoice_category=='purchase_pos'      %}selected{% endif %}>Mua vào (POS)</option>
-        <option value="sale_einvoice"     {% if invoice_category=='sale_einvoice'     %}selected{% endif %}>Bán ra (e-invoice)</option>
-        <option value="sale_pos"          {% if invoice_category=='sale_pos'          %}selected{% endif %}>Bán ra (POS)</option>
-      </select>
+
+      <!-- Multi-select dropdown: Loại hóa đơn -->
+      <div class="dropdown cat-picker-wrap">
+        <button type="button" class="snap-btn secondary" id="btn-cat-picker"
+                onclick="toggleCatPicker(event)">
+          <span id="cat-picker-label">Tất cả loại</span>
+        </button>
+        <div class="snap-col-picker-menu" id="cat-picker-menu" style="display:none; width:210px;">
+          <div class="snap-col-picker-header">
+            <button type="button" onclick="catPickerAll(true)">Chọn tất cả</button>
+            <button type="button" onclick="catPickerAll(false)">Bỏ tất cả</button>
+          </div>
+          <div id="cat-picker-items">
+            {% for val, lbl in [('purchase_einvoice','Mua vào (e-invoice)'), ('purchase_pos','Mua vào (POS)'), ('sale_einvoice','Bán ra (e-invoice)'), ('sale_pos','Bán ra (POS)')] %}
+            <label class="snap-col-pick-item">
+              <input type="checkbox" name="invoice_category" value="{{ val }}" class="cat-chk"
+                     {% if val in invoice_category_list %}checked{% endif %}
+                     onchange="updateCatPickerLabel()">
+              {{ lbl }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
       {% if not active_batch %}
       <input class="snap-input"
         type="text"
@@ -143,7 +161,7 @@
       <a class="snap-btn ghost" href="{{ url_for('snapshot.index') if not active_batch else url_for('snapshot.batch_detail', batch_id=active_batch.id) }}">Reset</a>
 
       <!-- Active filter tags -->
-      {% set _has_filter = search or invoice_category or start_date or end_date or account_id %}
+      {% set _has_filter = search or invoice_category_list or start_date or end_date or account_id %}
       {% if _has_filter %}
       <div class="snap-filter-tags">
         {% if account_id %}
@@ -152,9 +170,11 @@
           {% endif %}{% endfor %}
         {% endif %}
         {% if search %}<span class="snap-filter-tag">🔍 {{ search }}</span>{% endif %}
-        {% if invoice_category %}
+        {% if invoice_category_list %}
           {% set _cats = {'purchase_einvoice':'Mua vào','purchase_pos':'Mua POS','sale_einvoice':'Bán ra','sale_pos':'Bán POS'} %}
-          <span class="snap-filter-tag">📋 {{ _cats.get(invoice_category, invoice_category) }}</span>
+          {% for _cv in invoice_category_list %}
+          <span class="snap-filter-tag">📋 {{ _cats.get(_cv, _cv) }}</span>
+          {% endfor %}
         {% endif %}
         {% if start_date or end_date %}<span class="snap-filter-tag">📅 {{ start_date or '…' }} → {{ end_date or '…' }}</span>{% endif %}
       </div>
@@ -458,6 +478,7 @@
 
 /* ── Column picker ───────────────────────────────────────────── */
 .snap-col-picker-wrap { position: relative; }
+.cat-picker-wrap { position: relative; }
 .snap-col-picker-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -471,6 +492,10 @@
   max-height: 420px;
   overflow-y: auto;
   padding: 8px 0;
+}
+.cat-picker-wrap .snap-col-picker-menu {
+  left: 0;
+  right: auto;
 }
 .snap-col-picker-header {
   display: flex;
@@ -714,6 +739,48 @@
 </style>
 
 <script>
+// ── Category multi-select picker ──────────────────────────────────────────
+const CAT_LABELS = {
+  purchase_einvoice: 'Mua vào (e-invoice)',
+  purchase_pos:      'Mua vào (POS)',
+  sale_einvoice:     'Bán ra (e-invoice)',
+  sale_pos:          'Bán ra (POS)',
+};
+
+function getCheckedCats() {
+  return [...document.querySelectorAll('.cat-chk:checked')].map(cb => cb.value);
+}
+
+function updateCatPickerLabel() {
+  const checked = getCheckedCats();
+  const labelEl = document.getElementById('cat-picker-label');
+  if (checked.length === 0) {
+    labelEl.textContent = 'Tất cả loại';
+  } else if (checked.length === 1) {
+    labelEl.textContent = CAT_LABELS[checked[0]] || checked[0];
+  } else {
+    labelEl.textContent = `${checked.length} loại đã chọn`;
+  }
+}
+
+function catPickerAll(checked) {
+  document.querySelectorAll('.cat-chk').forEach(cb => { cb.checked = checked; });
+  updateCatPickerLabel();
+}
+
+function toggleCatPicker(evt) {
+  evt.stopPropagation();
+  const menu = document.getElementById('cat-picker-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+document.addEventListener('click', e => {
+  const catMenu = document.getElementById('cat-picker-menu');
+  if (catMenu && !catMenu.contains(e.target) && e.target.id !== 'btn-cat-picker' && !e.target.closest('#btn-cat-picker')) {
+    catMenu.style.display = 'none';
+  }
+});
+
 // ── Column definitions ─────────────────────────────────────────
 const SNAP_COL_DEFS = [
   { key: '_chk',            label: '',               group: '',               locked: true },
@@ -968,7 +1035,7 @@ async function exportNew() {
   }
   const body   = {
     search:           params.get('search')           || null,
-    invoice_category: params.get('invoice_category') || null,
+    invoice_category: params.getAll('invoice_category') || [],
     start_date:       params.get('start_date')       || null,
     end_date:         params.get('end_date')         || null,
     account_id:       params.get('account_id') ? parseInt(params.get('account_id')) : null,
@@ -1007,6 +1074,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('DOMContentLoaded', () => {
   buildSnapColPicker();
   applySnapColVisibility();
+  updateCatPickerLabel();
 
   if (document.getElementById('start_date')) {
     flatpickr("#start_date", {

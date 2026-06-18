@@ -24,13 +24,30 @@
             <option value="{{ a.id }}" {% if account_id == a.id|string %}selected{% endif %}>{{ a.name }}</option>
             {% endfor %}
           </select>
-          <select name="invoice_category" class="form-select">
-            <option value="">Tất cả</option>
-            <option value="purchase_einvoice" {% if invoice_category == 'purchase_einvoice' %}selected{% endif %}>Mua vào (e-invoice)</option>
-            <option value="purchase_pos"      {% if invoice_category == 'purchase_pos'      %}selected{% endif %}>Mua vào (POS)</option>
-            <option value="sale_einvoice"     {% if invoice_category == 'sale_einvoice'     %}selected{% endif %}>Bán ra (e-invoice)</option>
-            <option value="sale_pos"          {% if invoice_category == 'sale_pos'          %}selected{% endif %}>Bán ra (POS)</option>
-          </select>
+
+          <!-- Multi-select dropdown: Loại hóa đơn -->
+          <div class="dropdown cat-picker-wrap mt-1">
+            <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start"
+                    id="btn-cat-picker" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                    aria-expanded="false">
+              <span id="cat-picker-label">Tất cả loại</span>
+            </button>
+            <div class="dropdown-menu p-2" id="cat-picker-menu" style="min-width:220px; font-size:12px;">
+              <div class="d-flex justify-content-between mb-1 px-1">
+                <button type="button" class="btn btn-xs btn-link p-0 text-decoration-none" style="font-size:11px;" onclick="catPickerAll(true)">Chọn tất cả</button>
+                <button type="button" class="btn btn-xs btn-link p-0 text-decoration-none" style="font-size:11px;" onclick="catPickerAll(false)">Bỏ tất cả</button>
+              </div>
+              <div class="dropdown-divider mt-0 mb-1"></div>
+              {% for val, lbl in [('purchase_einvoice','Mua vào (e-invoice)'), ('purchase_pos','Mua vào (POS)'), ('sale_einvoice','Bán ra (e-invoice)'), ('sale_pos','Bán ra (POS)')] %}
+              <label class="dropdown-item d-flex align-items-center gap-2 py-1 px-2" style="cursor:pointer; border-radius:4px;">
+                <input type="checkbox" name="invoice_category" value="{{ val }}" class="cat-chk"
+                       {% if val in invoice_category_list %}checked{% endif %}
+                       onchange="updateCatPickerLabel()">
+                {{ lbl }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
         </div>
 
         <div class="col-md-2">
@@ -75,14 +92,16 @@
       </div>
 
       <!-- Active filter tags -->
-      {% set _has_filter = search or invoice_category or start_date or end_date or ghi_chu or thang_ke_khai %}
+      {% set _has_filter = search or invoice_category_list or start_date or end_date or ghi_chu or thang_ke_khai %}
       {% if _has_filter %}
       <div class="d-flex flex-wrap gap-1 mt-2">
         <span style="font-size:11px; color:var(--text-muted); align-self:center;">Đang lọc:</span>
         {% if search %}<span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">🔍 {{ search }}</span>{% endif %}
-        {% if invoice_category %}
+        {% if invoice_category_list %}
           {% set _cat_labels = {'purchase_einvoice':'Mua vào','purchase_pos':'Mua POS','sale_einvoice':'Bán ra','sale_pos':'Bán POS'} %}
-          <span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">📋 {{ _cat_labels.get(invoice_category, invoice_category) }}</span>
+          {% for _cv in invoice_category_list %}
+          <span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">📋 {{ _cat_labels.get(_cv, _cv) }}</span>
+          {% endfor %}
         {% endif %}
         {% if start_date or end_date %}<span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">📅 {{ start_date or '…' }} → {{ end_date or '…' }}</span>{% endif %}
         {% if ghi_chu %}<span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">🏷 {{ ghi_chu }}</span>{% endif %}
@@ -332,6 +351,35 @@
 
 {% block scripts %}
 <script>
+// ── Category multi-select picker ──────────────────────────────────────────
+const CAT_LABELS = {
+  purchase_einvoice: 'Mua vào (e-invoice)',
+  purchase_pos:      'Mua vào (POS)',
+  sale_einvoice:     'Bán ra (e-invoice)',
+  sale_pos:          'Bán ra (POS)',
+};
+
+function getCheckedCats() {
+  return [...document.querySelectorAll('.cat-chk:checked')].map(cb => cb.value);
+}
+
+function updateCatPickerLabel() {
+  const checked = getCheckedCats();
+  const labelEl = document.getElementById('cat-picker-label');
+  if (checked.length === 0) {
+    labelEl.textContent = 'Tất cả loại';
+  } else if (checked.length === 1) {
+    labelEl.textContent = CAT_LABELS[checked[0]] || checked[0];
+  } else {
+    labelEl.textContent = `${checked.length} loại đã chọn`;
+  }
+}
+
+function catPickerAll(checked) {
+  document.querySelectorAll('.cat-chk').forEach(cb => { cb.checked = checked; });
+  updateCatPickerLabel();
+}
+
 // ── Column definitions (key → label, group, default visible) ─────────────────
 const COL_DEFS = [
   // Thông tin hóa đơn
@@ -452,6 +500,7 @@ function colPickerAll(checked) {
 document.addEventListener('DOMContentLoaded', () => {
   buildColPicker();
   applyColVisibility();
+  updateCatPickerLabel();
 
   if (document.getElementById('start_date')) {
     flatpickr("#start_date", {
@@ -549,13 +598,13 @@ async function exportExcel() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        start_date:       params.get('start_date')       || null,
-        end_date:         params.get('end_date')         || null,
-        search:           params.get('search')           || null,
-        ghi_chu:          params.get('ghi_chu')          || null,
-        thang_ke_khai:    params.get('thang_ke_khai')    || null,
-        invoice_category: params.get('invoice_category') || null,
-        account_id:       params.get('account_id') ? parseInt(params.get('account_id')) : null,
+        start_date:        params.get('start_date')       || null,
+        end_date:           params.get('end_date')         || null,
+        search:             params.get('search')           || null,
+        ghi_chu:            params.get('ghi_chu')          || null,
+        thang_ke_khai:      params.get('thang_ke_khai')    || null,
+        invoice_category:   params.getAll('invoice_category') || [],
+        account_id:         params.get('account_id') ? parseInt(params.get('account_id')) : null,
       }),
     });
     const data = await res.json();

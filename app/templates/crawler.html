@@ -858,19 +858,43 @@ socket.on('crawler_done', (data) => {
 });
 
 // ── Polling ───────────────────────────────────────────────────────────────────
+// ── Polling ───────────────────────────────────────────────────────────────────
 setInterval(async () => {
   try {
     const res  = await fetch('/crawler/api/status');
     const data = await res.json();
     setRunning(data.is_running);
     setAutoSync(!!data.auto_sync_active, data.auto_sync_config || null);
+
     if (data.running_job) {
       const j = data.running_job;
-      // Chỉ cập nhật stat khi total đã biết (phase process)
-      if (j.total_invoices > 0 && _totalKnown) {
-        document.getElementById('stat-total').textContent = j.total_invoices.toLocaleString('vi-VN');
-        document.getElementById('stat-done').textContent  = j.downloaded_invoices.toLocaleString('vi-VN');
-        document.getElementById('stat-fail').textContent  = j.failed_invoices.toLocaleString('vi-VN');
+      if (j.total_invoices > 0 && !_totalKnown) {
+        _totalKnown = true;
+        _phase = 'process';
+        _startTs = Date.now();
+        _updatePhaseLabel();
+
+        const total    = j.total_invoices;
+        const done     = j.downloaded_invoices || 0;
+        const failed   = j.failed_invoices || 0;
+        const finished = done + failed;
+        const pct      = Math.min(100, Math.round(finished / total * 100));
+
+        document.getElementById('stat-total').textContent = total.toLocaleString('vi-VN');
+        document.getElementById('stat-done').textContent  = done.toLocaleString('vi-VN');
+        document.getElementById('stat-fail').textContent  = failed.toLocaleString('vi-VN');
+
+        const bar = document.getElementById('prog-bar');
+        bar.style.width = pct + '%';
+        bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+        document.getElementById('prog-pct').textContent = pct + '%';
+
+        const remaining = total - finished;
+        document.getElementById('prog-label').textContent =
+          finished.toLocaleString('vi-VN') + ' / ' + total.toLocaleString('vi-VN') +
+          (remaining > 0 ? ` — còn ${remaining.toLocaleString('vi-VN')}` : ' — hoàn thành');
+
+        progCard.style.setProperty('display', 'block', 'important');
       }
     }
   } catch(e) {}

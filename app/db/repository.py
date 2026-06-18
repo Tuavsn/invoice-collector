@@ -5,13 +5,37 @@ Business logic NEVER touches the ORM directly.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from loguru import logger
 from sqlalchemy import desc, func
 
 from app.db.models import AppSetting, CrawlJob, GdtAccount, Invoice, SnapshotBatch
 from app.extensions import db
+
+
+# Kiểu cho tham số invoice_category — chấp nhận 1 giá trị (str) hoặc nhiều giá trị (list/tuple).
+CategoryFilter = Optional[Union[str, Sequence[str]]]
+
+
+def _apply_category_filter(query, invoice_category: CategoryFilter):
+    """
+    Áp dụng filter invoice_category lên query, hỗ trợ:
+      - None / "" / []  → không filter
+      - str             → filter bằng (tương thích cũ)
+      - list/tuple/set  → filter IN (...) — chọn nhiều loại
+    """
+    if not invoice_category:
+        return query
+    if isinstance(invoice_category, str):
+        return query.filter(Invoice.invoice_category == invoice_category)
+    # list/tuple/set
+    values = [v for v in invoice_category if v]
+    if not values:
+        return query
+    if len(values) == 1:
+        return query.filter(Invoice.invoice_category == values[0])
+    return query.filter(Invoice.invoice_category.in_(values))
 
 
 # ─────────────────────────────────────────── Invoice Repository
@@ -60,7 +84,6 @@ class InvoiceRepository:
         invoice_symbol: Optional[str] = None,
         invoice_form: Optional[str] = None,
         invoice_category: Optional[str] = None,
-        total_amount: Optional[float] = None,
     ) -> Optional[Invoice]:
         """
         Lookup by (invoice_no, invoice_symbol, invoice_form, invoice_category).
@@ -73,8 +96,6 @@ class InvoiceRepository:
             query = query.filter_by(invoice_form=invoice_form)
         if invoice_category is not None:
             query = query.filter_by(invoice_category=invoice_category)
-        if total_amount is not None:
-            query = query.filter_by(total_amount=total_amount)
         return query.first()
 
     @staticmethod
@@ -85,7 +106,7 @@ class InvoiceRepository:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         invoice_type: Optional[str] = None,
-        invoice_category: Optional[str] = None,
+        invoice_category: CategoryFilter = None,
         account_id: Optional[int] = None,
         ghi_chu: Optional[str] = None,
         thang_ke_khai: Optional[str] = None,
@@ -108,8 +129,7 @@ class InvoiceRepository:
             query = query.filter(Invoice.issue_date < end_date + timedelta(days=1))
         if invoice_type:
             query = query.filter(Invoice.invoice_type == invoice_type)
-        if invoice_category:
-            query = query.filter(Invoice.invoice_category == invoice_category)
+        query = _apply_category_filter(query, invoice_category)
         if account_id is not None:
             query = query.filter(Invoice.account_id == account_id)
         if ghi_chu:
@@ -164,6 +184,7 @@ class InvoiceRepository:
         thang_ke_khai: Optional[str] = None,
         search: Optional[str] = None,
         account_id: Optional[int] = None,
+        invoice_category: CategoryFilter = None,
     ) -> List[Invoice]:
         query = db.session.query(Invoice)
         if start_date:
@@ -184,7 +205,70 @@ class InvoiceRepository:
             )
         if account_id is not None:
             query = query.filter(Invoice.account_id == account_id)
+        query = _apply_category_filter(query, invoice_category)
         return query.order_by(Invoice.issue_date).all()
+
+    @staticmethod
+    def account_breakdown() -> List[Dict[str, Any]]:
+        """
+        Thống kê theo từng tài khoản: số HĐ theo từng loại (category),
+        tổng tiền mua vào / bán ra (gross, total_amount), tổng VAT,
+        tổng doanh thu (net, amount của HĐ bán ra).
+        """
+        rows = (
+            db.session.query(
+                Invoice.account_id,
+                Invoice.invoice_category,
+                func.count(Invoice.id).label("count"),
+                func.sum(Invoice.amount).label("amount"),
+                func.sum(Invoice.vat_amount).label("vat"),
+                func.sum(Invoice.total_amount).label("total"),
+            )
+            .group_by(Invoice.account_id, Invoice.invoice_category)
+            .all()
+        )
+
+        accounts: Dict[Optional[int], Dict[str, Any]] = {}
+        for r in rows:
+            acc = accounts.setdefault(r.account_id, {
+                "account_id": r.account_id,
+                "categories": {},
+                "total_invoices": 0,
+                "total_purchase": 0.0,  # tổng tiền mua vào (gross)
+                "total_sale": 0.0,      # tổng tiền bán ra (gross)
+                "total_vat": 0.0,
+                "total_revenue": 0.0,   # tổng doanh thu (net, từ HĐ bán ra)
+            })
+            category = r.invoice_category or "khac"
+            acc["categories"][category] = {
+                "count": r.count,
+                "amount": r.amount or 0.0,
+                "vat": r.vat or 0.0,
+                "total": r.total or 0.0,
+            }
+            acc["total_invoices"] += r.count
+            acc["total_vat"] += (r.vat or 0.0)
+            if category.startswith("purchase"):
+                acc["total_purchase"] += (r.total or 0.0)
+            elif category.startswith("sale"):
+                acc["total_sale"] += (r.total or 0.0)
+                acc["total_revenue"] += (r.amount or 0.0)
+
+        account_ids = [aid for aid in accounts if aid is not None]
+        names = {}
+        if account_ids:
+            names = {
+                a.id: a.name
+                for a in db.session.query(GdtAccount).filter(GdtAccount.id.in_(account_ids)).all()
+            }
+
+        result = []
+        for aid, data in accounts.items():
+            data["account_name"] = names.get(aid, "Không có tài khoản")
+            result.append(data)
+
+        result.sort(key=lambda d: d["account_name"])
+        return result
 
 
 # ──────────────────────────────────────────── CrawlJob Repository
@@ -355,7 +439,7 @@ class SnapshotRepository:
         page: int = 1,
         per_page: int = 50,
         search: Optional[str] = None,
-        invoice_category: Optional[str] = None,
+        invoice_category: CategoryFilter = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         account_id: Optional[int] = None,
@@ -373,8 +457,7 @@ class SnapshotRepository:
                 | Invoice.buyer_name.ilike(like)
                 | Invoice.seller_tax_code.ilike(like)
             )
-        if invoice_category:
-            query = query.filter(Invoice.invoice_category == invoice_category)
+        query = _apply_category_filter(query, invoice_category)
         if start_date:
             query = query.filter(Invoice.issue_date >= start_date)
         if end_date:
@@ -397,7 +480,7 @@ class SnapshotRepository:
         page: int = 1,
         per_page: int = 50,
         search: Optional[str] = None,
-        invoice_category: Optional[str] = None,
+        invoice_category: CategoryFilter = None,
     ):
         query = db.session.query(Invoice).filter_by(snapshot_batch_id=batch_id)
         if search:
@@ -407,15 +490,14 @@ class SnapshotRepository:
                 | Invoice.seller_name.ilike(like)
                 | Invoice.buyer_name.ilike(like)
             )
-        if invoice_category:
-            query = query.filter(Invoice.invoice_category == invoice_category)
+        query = _apply_category_filter(query, invoice_category)
         query = query.order_by(Invoice.issue_date)
         return query.paginate(page=page, per_page=per_page, error_out=False)
 
     @staticmethod
     def get_new_for_export(
         search: Optional[str] = None,
-        invoice_category: Optional[str] = None,
+        invoice_category: CategoryFilter = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         account_id: Optional[int] = None,
@@ -431,8 +513,7 @@ class SnapshotRepository:
                 | Invoice.seller_name.ilike(like)
                 | Invoice.buyer_name.ilike(like)
             )
-        if invoice_category:
-            query = query.filter(Invoice.invoice_category == invoice_category)
+        query = _apply_category_filter(query, invoice_category)
         if start_date:
             query = query.filter(Invoice.issue_date >= start_date)
         if end_date:

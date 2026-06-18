@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
+import shutil
 import zipfile
 from datetime import datetime, date
 from pathlib import Path
@@ -12,7 +12,6 @@ from xml.etree import ElementTree as ET
 
 import httpx
 from loguru import logger
-from playwright.async_api import Page
 
 from app.automation.browser import BrowserManager
 from app.automation.login import ensure_logged_in
@@ -212,6 +211,23 @@ def _normalize_xml_line_item(item: Dict[str, Any]) -> Dict[str, Any]:
         "tthue":   item.get("tien_thue"),
     }
 
+def _normalize_detail_line_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Chuẩn hóa hdhhdvu từ detail JSON API → normalized keys (giống XML path)."""
+    tsuat_raw = item.get("ltsuat") or item.get("tsuat")
+    return {
+        "stt":     item.get("stt"),
+        "tchat":   item.get("tchat"),
+        "ten":     item.get("ten"),
+        "dvtinh":  item.get("dvtinh"),
+        "sluong":  item.get("sluong"),
+        "dgia":    item.get("dgia"),
+        "tlckhau": item.get("tlckhau"),
+        "stckhau": item.get("stckhau"),
+        "thtien":  item.get("thtien"),
+        "tsuat":   _render_tsuat(tsuat_raw),
+        "tthue":   item.get("tthue"),
+    }
+
 
 def _render_tsuat(tsuat_raw: Any) -> str:
     """Render thuế suất: float 0.08 → '8%', string '8%' → '8%'."""
@@ -349,7 +365,7 @@ def _map_inv(inv: Dict[str, Any]) -> Dict[str, Any]:
         "invoice_no":        _s("shdon"),
         "invoice_symbol":    _s("khhdon"),
         "invoice_form":      str(inv.get("khmshdon") or ""),
-        "invoice_type":      _s("thdon"),
+        "invoice_type":      _s("thdon") or _s("tlhdon"),
         "issue_date":        _s("tdlap"),
         "currency":          _s("dvtte"),
         "exchange_rate":     _f("tgia"),
@@ -455,7 +471,7 @@ def build_fallback_xml(inv: Dict[str, Any], detail_json: Dict[str, Any]) -> str:
         "<HDon><DLHDon>"
         "<TTChung>"
         f"<PBan>{_xs('pban')}</PBan>"
-        f"<THDon>{_xs('thdon')}</THDon>"
+        f"<THDon>{_xs('thdon') or _xs('tlhdon')}</THDon>"
         f"<KHMSHDon>{_xi('khmshdon')}</KHMSHDon>"
         f"<KHHDon>{_xs('khhdon')}</KHHDon>"
         f"<SHDon>{_xs('shdon')}</SHDon>"
@@ -504,8 +520,8 @@ def build_fallback_html(
     line_items: Optional[List[Dict[str, Any]]] = None,
     static_url_root: str = "/static",
 ) -> str:
-    bg_url   = f"{static_url_root}/img/viewinvoice-bg.jpg"
-    sign_url = f"{static_url_root}/img/sign-check.jpg"
+    bg_url   = "viewinvoice-bg.jpg"
+    sign_url = "sign-check.jpg"
 
     day, month, year = _parse_issue_date(detail_json.get("tdlap"))
 
@@ -1072,7 +1088,8 @@ class ApiCrawlerEngine:
         # ── Fallback line_items + vat_breakdown từ detail ────────────────────
         if detail_json:
             if not line_items:
-                line_items = detail_json.get("hdhhdvu") or []
+                raw_items = detail_json.get("hdhhdvu") or []
+                line_items = [_normalize_detail_line_item(i) for i in raw_items]
                 if line_items:
                     logger.debug("line_items từ detail JSON: {} dòng cho #{}", len(line_items), invoice_no)
 
@@ -1106,6 +1123,7 @@ class ApiCrawlerEngine:
             if not extract.view_html_path:
                 used_fallback = True
                 try:
+                    self._copy_template_images(extracted_dir)
                     html_content       = build_fallback_html(inv, detail_json, line_items=line_items)
                     html_path          = extracted_dir / "invoice_view.html"
                     html_path.write_text(html_content, encoding="utf-8")
@@ -1191,6 +1209,27 @@ class ApiCrawlerEngine:
             result["metadata_path"] = None
 
         return result
+
+    def _copy_template_images(self, dest_dir: Path) -> None:
+        """Copy ảnh nền + ảnh chữ ký vào cùng thư mục với HTML fallback để render độc lập."""
+        static_dir = getattr(self.app, "static_folder", None) if self.app else None
+        if not static_dir:
+            logger.warning("Không xác định được static_folder — bỏ qua copy ảnh template.")
+            return
+
+        src_dir = Path(static_dir) / "img"
+        for name in ("viewinvoice-bg.jpg", "sign-check.jpg"):
+            dst = dest_dir / name
+            if dst.exists():
+                continue
+            src = src_dir / name
+            if src.exists():
+                try:
+                    shutil.copy2(src, dst)
+                except Exception as exc:
+                    logger.warning("Copy ảnh template {} lỗi: {}", name, exc)
+            else:
+                logger.warning("Không tìm thấy ảnh template nguồn: {}", src)
 
     async def _login_and_get_jwt(self) -> str:
         ctx  = await self._browser.start()

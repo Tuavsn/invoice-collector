@@ -406,7 +406,7 @@ function buildAccountScheduleInputs() {
         <span style="flex:1; font-weight:600;">${name}</span>
         <input type="time" class="form-control form-control-sm acct-schedule-time"
                data-account-id="${aid}" value="${val}"
-               style="width:120px; font-family:var(--font-mono);" />
+               style="width:130px; font-family:var(--font-mono);" />
         <span style="font-size:10px; color:var(--text-muted);">ICT</span>
       </div>`;
   }).join('');
@@ -926,6 +926,7 @@ setAutoSync(isAutoSync, autoSyncCfg && Object.keys(autoSyncCfg).length ? autoSyn
   flatpickr("#inp-end-date",   fpOpts);
 
   const fpOptsAuto = {
+    locale: "vn",
     dateFormat: "Y-m-d",
     altInput: true,
     altFormat: "d/m/Y",

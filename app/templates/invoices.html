@@ -38,7 +38,14 @@
                 <button type="button" class="btn btn-xs btn-link p-0 text-decoration-none" style="font-size:11px;" onclick="catPickerAll(false)">Bỏ tất cả</button>
               </div>
               <div class="dropdown-divider mt-0 mb-1"></div>
-              {% for val, lbl in [('purchase_einvoice','Mua vào (e-invoice)'), ('purchase_pos','Mua vào (POS)'), ('sale_einvoice','Bán ra (e-invoice)'), ('sale_pos','Bán ra (POS)')] %}
+              {% for val, lbl in [
+                  ('sale_einvoice', 'Bán ra - HĐ điện tử'),
+                  ('sale_pos', 'Bán ra - HĐ máy tính tiền'),
+                  ('purchase_einvoice_5', 'Mua vào - Đã cấp HĐ - điện tử'),
+                  ('purchase_pos_5', 'Mua vào - Đã cấp HĐ - máy tính tiền'),
+                  ('purchase_einvoice_6', 'Mua vào - Cục thuế không nhận mã'),
+                  ('purchase_einvoice_8', 'Mua vào - Cục thuế đã nhận có mã')
+              ] %}
               <label class="dropdown-item d-flex align-items-center gap-2 py-1 px-2" style="cursor:pointer; border-radius:4px;">
                 <input type="checkbox" name="invoice_category" value="{{ val }}" class="cat-chk"
                        {% if val in invoice_category_list %}checked{% endif %}
@@ -98,7 +105,7 @@
         <span style="font-size:11px; color:var(--text-muted); align-self:center;">Đang lọc:</span>
         {% if search %}<span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">🔍 {{ search }}</span>{% endif %}
         {% if invoice_category_list %}
-          {% set _cat_labels = {'purchase_einvoice':'Mua vào','purchase_pos':'Mua POS','sale_einvoice':'Bán ra','sale_pos':'Bán POS'} %}
+          {% set _cat_labels = {'sale_einvoice': 'Bán ra - HĐ điện tử', 'sale_pos': 'Bán ra - HĐ máy tính tiền', 'purchase_einvoice_5': 'Mua vào - Đã cấp HĐ - điện tử', 'purchase_pos_5': 'Mua vào - Đã cấp HĐ - máy tính tiền', 'purchase_einvoice_6': 'Mua vào - Cục thuế không nhận mã', 'purchase_einvoice_8': 'Mua vào - Cục thuế đã nhận có mã'} %}
           {% for _cv in invoice_category_list %}
           <span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">📋 {{ _cat_labels.get(_cv, _cv) }}</span>
           {% endfor %}
@@ -293,7 +300,7 @@
           {% set _items = inv.get_line_items() %}
           {% if _items %}
             {% set _names = [] %}
-            {% for _it in _items %}{% if _it.ten_hhdvu %}{% set _ = _names.append(_it.ten_hhdvu) %}{% endif %}{% endfor %}
+            {% for _it in _items %}{% set _ten = _it.ten or _it.ten_hhdvu %}{% if _ten %}{% set _ = _names.append(_ten) %}{% endif %}{% endfor %}
             {% set _mat_hang_display = (_names | join('; ')) or inv.mat_hang or '' %}
           {% else %}
             {% set _mat_hang_display = inv.mat_hang or '' %}
@@ -353,10 +360,12 @@
 <script>
 // ── Category multi-select picker ──────────────────────────────────────────
 const CAT_LABELS = {
-  purchase_einvoice: 'Mua vào (e-invoice)',
-  purchase_pos:      'Mua vào (POS)',
-  sale_einvoice:     'Bán ra (e-invoice)',
-  sale_pos:          'Bán ra (POS)',
+  sale_einvoice:        'Bán ra - HĐ điện tử',
+  sale_pos:             'Bán ra - HĐ máy tính tiền',
+  purchase_einvoice_5:  'Mua vào - Đã cấp HĐ - điện tử',
+  purchase_pos_5:       'Mua vào - Đã cấp HĐ - máy tính tiền',
+  purchase_einvoice_6:  'Mua vào - Cục thuế không nhận mã',
+  purchase_einvoice_8:  'Mua vào - Cục thuế đã nhận có mã'
 };
 
 function getCheckedCats() {

@@ -130,7 +130,14 @@
             <button type="button" onclick="catPickerAll(false)">Bỏ tất cả</button>
           </div>
           <div id="cat-picker-items">
-            {% for val, lbl in [('purchase_einvoice','Mua vào (e-invoice)'), ('purchase_pos','Mua vào (POS)'), ('sale_einvoice','Bán ra (e-invoice)'), ('sale_pos','Bán ra (POS)')] %}
+            {% for val, lbl in [
+                ('sale_einvoice', 'Bán ra - HĐ điện tử'),
+                ('sale_pos', 'Bán ra - HĐ máy tính tiền'),
+                ('purchase_einvoice_5', 'Mua vào - Đã cấp HĐ - điện tử'),
+                ('purchase_pos_5', 'Mua vào - Đã cấp HĐ - máy tính tiền'),
+                ('purchase_einvoice_6', 'Mua vào - Cục thuế không nhận mã'),
+                ('purchase_einvoice_8', 'Mua vào - Cục thuế đã nhận có mã')
+            ] %}
             <label class="snap-col-pick-item">
               <input type="checkbox" name="invoice_category" value="{{ val }}" class="cat-chk"
                      {% if val in invoice_category_list %}checked{% endif %}
@@ -741,10 +748,12 @@
 <script>
 // ── Category multi-select picker ──────────────────────────────────────────
 const CAT_LABELS = {
-  purchase_einvoice: 'Mua vào (e-invoice)',
-  purchase_pos:      'Mua vào (POS)',
-  sale_einvoice:     'Bán ra (e-invoice)',
-  sale_pos:          'Bán ra (POS)',
+  sale_einvoice:        'Bán ra - HĐ điện tử',
+  sale_pos:             'Bán ra - HĐ máy tính tiền',
+  purchase_einvoice_5:  'Mua vào - Đã cấp HĐ - điện tử',
+  purchase_pos_5:       'Mua vào - Đã cấp HĐ - máy tính tiền',
+  purchase_einvoice_6:  'Mua vào - Cục thuế không nhận mã',
+  purchase_einvoice_8:  'Mua vào - Cục thuế đã nhận có mã'
 };
 
 function getCheckedCats() {

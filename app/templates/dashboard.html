@@ -6,8 +6,11 @@
 
 {% set total_purchase = account_stats | sum(attribute='total_purchase') %}
 {% set total_sale     = account_stats | sum(attribute='total_sale') %}
-{% set total_vat_all  = account_stats | sum(attribute='total_vat') %}
+{% set total_purchase_vat = account_stats | sum(attribute='purchase_vat') %}
+{% set total_sale_vat     = account_stats | sum(attribute='sale_vat') %}
+{% set total_vat_payable  = account_stats | sum(attribute='vat_payable') %}
 {% set total_revenue  = account_stats | sum(attribute='total_revenue') %}
+{% set total_profit = account_stats | sum(attribute='total_profit') %}
 
 <!-- ── Summary cards ──────────────────────────────── -->
 <div class="d-flex flex-wrap gap-3 mb-4">
@@ -42,12 +45,38 @@
   </div>
 
   <div class="stat-card d-flex align-items-start gap-3" style="flex:1 1 190px;">
-    <div class="stat-icon" style="background:#fffbeb; color:#b45309;">
-      <i class="bi bi-cash-stack"></i>
+    <div class="stat-icon" style="background:#fef2f2; color:#c81e1e;">
+      <i class="bi bi-arrow-down-circle"></i>
     </div>
     <div>
-      <div class="stat-label">Tổng VAT</div>
-      <div class="stat-value" style="font-size:16px;">{{ "{:,.0f}".format(total_vat_all) }} ₫</div>
+      <div class="stat-label">VAT đầu vào</div>
+      <div class="stat-value" style="font-size:16px;">
+        {{ "{:,.0f}".format(total_purchase_vat) }} ₫
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-card d-flex align-items-start gap-3" style="flex:1 1 190px;">
+    <div class="stat-icon" style="background:#f0fdf4; color:#057a55;">
+      <i class="bi bi-arrow-up-circle"></i>
+    </div>
+    <div>
+      <div class="stat-label">VAT đầu ra</div>
+      <div class="stat-value" style="font-size:16px;">
+        {{ "{:,.0f}".format(total_sale_vat) }} ₫
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-card d-flex align-items-start gap-3" style="flex:1 1 190px;">
+    <div class="stat-icon" style="background:#eff6ff; color:#1a56db;">
+      <i class="bi bi-calculator"></i>
+    </div>
+    <div>
+      <div class="stat-label">VAT phải nộp</div>
+      <div class="stat-value" style="font-size:16px;">
+        {{ "{:,.0f}".format(total_vat_payable) }} ₫
+      </div>
     </div>
   </div>
 
@@ -58,6 +87,18 @@
     <div>
       <div class="stat-label">Tổng doanh thu</div>
       <div class="stat-value" style="font-size:16px;">{{ "{:,.0f}".format(total_revenue) }} ₫</div>
+    </div>
+  </div>
+
+  <div class="stat-card d-flex align-items-start gap-3" style="flex:1 1 190px;">
+    <div class="stat-icon" style="background:#ecfdf5; color:#059669;">
+      <i class="bi bi-currency-dollar"></i>
+    </div>
+    <div>
+      <div class="stat-label">Lợi nhuận</div>
+      <div class="stat-value" style="font-size:16px;">
+        {{ "{:,.0f}".format(total_profit) }} ₫
+      </div>
     </div>
   </div>
 </div>
@@ -75,12 +116,20 @@
 
 <!-- ── Account cards ──────────────────────────────────── -->
 <div class="row g-3">
-  {% for acc in account_stats %}
+{% for acc in account_stats %}
+
   {% set total = acc.total_invoices if acc.total_invoices > 0 else 1 %}
+
   {% set c_se = acc.categories.get('sale_einvoice', {}).get('count', 0) %}
   {% set c_sp = acc.categories.get('sale_pos', {}).get('count', 0) %}
-  {% set c_pe = acc.categories.get('purchase_einvoice', {}).get('count', 0) %}
-  {% set c_pp = acc.categories.get('purchase_pos', {}).get('count', 0) %}
+
+  {% set c_pe5 = acc.categories.get('purchase_einvoice_5', {}).get('count', 0) %}
+  {% set c_pp5 = acc.categories.get('purchase_pos_5', {}).get('count', 0) %}
+  {% set c_pe6 = acc.categories.get('purchase_einvoice_6', {}).get('count', 0) %}
+  {% set c_pe8 = acc.categories.get('purchase_einvoice_8', {}).get('count', 0) %}
+
+  {% set c_pe = c_pe5 + c_pe6 + c_pe8 %}
+  {% set c_pp = c_pp5 %}
   <div class="col-md-6 col-lg-4">
     <div class="card h-100">
       <div class="card-header d-flex align-items-center justify-content-between">
@@ -105,21 +154,76 @@
         <!-- 4 chỉ số tài chính -->
         <div class="row g-2 text-center">
           <div class="col-6">
-            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;">Mua vào</div>
-            <div style="font-family:var(--font-mono);font-weight:700;color:#c81e1e;font-size:14px;">{{ "{:,.0f}".format(acc.total_purchase) }} ₫</div>
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">
+              Mua vào
+            </div>
+            <div style="font-family:var(--font-mono);font-weight:700;color:#c81e1e;font-size:14px;">
+              {{ "{:,.0f}".format(acc.total_purchase) }} ₫
+            </div>
           </div>
+
           <div class="col-6">
-            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;">Bán ra</div>
-            <div style="font-family:var(--font-mono);font-weight:700;color:#057a55;font-size:14px;">{{ "{:,.0f}".format(acc.total_sale) }} ₫</div>
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">
+              Bán ra
+            </div>
+            <div style="font-family:var(--font-mono);font-weight:700;color:#057a55;font-size:14px;">
+              {{ "{:,.0f}".format(acc.total_sale) }} ₫
+            </div>
           </div>
+
           <div class="col-6">
-            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;">VAT</div>
-            <div style="font-family:var(--font-mono);font-weight:700;font-size:14px;">{{ "{:,.0f}".format(acc.total_vat) }} ₫</div>
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">
+              VAT đầu vào
+            </div>
+            <div style="font-family:var(--font-mono);font-weight:700;color:#c81e1e;font-size:14px;">
+              {{ "{:,.0f}".format(acc.purchase_vat) }} ₫
+            </div>
           </div>
+
           <div class="col-6">
-            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;">Doanh thu</div>
-            <div style="font-family:var(--font-mono);font-weight:700;color:var(--brand);font-size:14px;">{{ "{:,.0f}".format(acc.total_revenue) }} ₫</div>
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">
+              VAT đầu ra
+            </div>
+            <div style="font-family:var(--font-mono);font-weight:700;color:#057a55;font-size:14px;">
+              {{ "{:,.0f}".format(acc.sale_vat) }} ₫
+            </div>
           </div>
+
+          <div class="col-6">
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">
+              VAT phải nộp
+            </div>
+            <div style="font-family:var(--font-mono);font-weight:700;color:#1a56db;font-size:14px;">
+              {{ "{:,.0f}".format(acc.vat_payable) }} ₫
+            </div>
+          </div>
+
+          <div class="col-6">
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">
+              Doanh thu
+            </div>
+            <div style="font-family:var(--font-mono);font-weight:700;color:var(--brand);font-size:14px;">
+              {{ "{:,.0f}".format(acc.total_revenue) }} ₫
+            </div>
+          </div>
+
+          <div class="col-6">
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">
+              Lợi nhuận
+            </div>
+
+            <div
+              style="
+                font-family:var(--font-mono);
+                font-weight:700;
+                font-size:14px;
+                color:{{ '#057a55' if acc.total_profit >= 0 else '#c81e1e' }};
+              "
+            >
+              {{ "{:,.0f}".format(acc.total_profit) }} ₫
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -143,16 +247,16 @@
 <script>
 const accountStats = {{ account_stats | tojson }};
 const accLabels   = accountStats.map(a => a.account_name);
-const accPurchase = accountStats.map(a => a.total_purchase / 1e6);
-const accSale     = accountStats.map(a => a.total_sale / 1e6);
+const accPurchase = accountStats.map(a => a.total_purchase);
+const accSale     = accountStats.map(a => a.total_sale);
 
 new Chart(document.getElementById('accountChart'), {
   type: 'bar',
   data: {
     labels: accLabels,
     datasets: [
-      { label: 'Mua vào (triệu ₫)', data: accPurchase, backgroundColor: 'rgba(200,30,30,0.75)', borderRadius: 5 },
-      { label: 'Bán ra (triệu ₫)',  data: accSale,     backgroundColor: 'rgba(5,122,85,0.75)',  borderRadius: 5 },
+      { label: 'Mua vào (vn₫)', data: accPurchase, backgroundColor: 'rgba(200,30,30,0.75)', borderRadius: 5 },
+      { label: 'Bán ra (vn₫)',  data: accSale,     backgroundColor: 'rgba(5,122,85,0.75)',  borderRadius: 5 },
     ]
   },
   options: {

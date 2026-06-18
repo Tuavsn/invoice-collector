@@ -44,6 +44,8 @@ def _apply_category_filter(query, invoice_category: CategoryFilter):
 class InvoiceRepository:
     @staticmethod
     def upsert(data: Dict[str, Any]) -> Invoice:
+        logger.debug("Upsert HĐ: {} ({} / {} / {})", data.get("invoice_no"), data.get("invoice_symbol"), data.get("invoice_form"), data.get("invoice_category"))
+        logger.debug("Upsert HĐ data: {}", data)
         existing = (
             db.session.query(Invoice)
             .filter_by(
@@ -159,24 +161,6 @@ class InvoiceRepository:
         }
 
     @staticmethod
-    def monthly_summary() -> List[Dict[str, Any]]:
-        rows = (
-            db.session.query(
-                func.strftime("%Y-%m", Invoice.issue_date).label("month"),
-                func.count(Invoice.id).label("count"),
-                func.sum(Invoice.vat_amount).label("vat"),
-                func.sum(Invoice.total_amount).label("total"),
-            )
-            .group_by("month")
-            .order_by("month")
-            .all()
-        )
-        return [
-            {"month": r.month, "count": r.count, "vat": r.vat or 0, "total": r.total or 0}
-            for r in rows
-        ]
-
-    @staticmethod
     def get_for_export(
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
@@ -211,63 +195,136 @@ class InvoiceRepository:
     @staticmethod
     def account_breakdown() -> List[Dict[str, Any]]:
         """
-        Thống kê theo từng tài khoản: số HĐ theo từng loại (category),
-        tổng tiền mua vào / bán ra (gross, total_amount), tổng VAT,
-        tổng doanh thu (net, amount của HĐ bán ra).
+        Thống kê theo từng tài khoản.
+
+        - total_purchase: Tổng tiền mua vào (total_amount)
+        - total_sale: Tổng tiền bán ra (total_amount)
+
+        - purchase_vat: VAT đầu vào
+        - sale_vat: VAT đầu ra
+        - total_vat: Tổng VAT
+        - vat_payable: VAT phải nộp = VAT đầu ra - VAT đầu vào
+
+        - total_revenue: Doanh thu trước VAT (amount của HĐ bán ra)
+        - total_profit: Doanh thu - Chi phí mua vào
         """
+
         rows = (
             db.session.query(
                 Invoice.account_id,
                 Invoice.invoice_category,
                 func.count(Invoice.id).label("count"),
-                func.sum(Invoice.amount).label("amount"),
-                func.sum(Invoice.vat_amount).label("vat"),
-                func.sum(Invoice.total_amount).label("total"),
+                func.coalesce(func.sum(Invoice.amount), 0).label("amount"),
+                func.coalesce(func.sum(Invoice.vat_amount), 0).label("vat"),
+                func.coalesce(func.sum(Invoice.total_amount), 0).label("total"),
             )
-            .group_by(Invoice.account_id, Invoice.invoice_category)
+            .group_by(
+                Invoice.account_id,
+                Invoice.invoice_category,
+            )
             .all()
         )
 
         accounts: Dict[Optional[int], Dict[str, Any]] = {}
-        for r in rows:
-            acc = accounts.setdefault(r.account_id, {
-                "account_id": r.account_id,
-                "categories": {},
-                "total_invoices": 0,
-                "total_purchase": 0.0,  # tổng tiền mua vào (gross)
-                "total_sale": 0.0,      # tổng tiền bán ra (gross)
-                "total_vat": 0.0,
-                "total_revenue": 0.0,   # tổng doanh thu (net, từ HĐ bán ra)
-            })
-            category = r.invoice_category or "khac"
-            acc["categories"][category] = {
-                "count": r.count,
-                "amount": r.amount or 0.0,
-                "vat": r.vat or 0.0,
-                "total": r.total or 0.0,
-            }
-            acc["total_invoices"] += r.count
-            acc["total_vat"] += (r.vat or 0.0)
-            if category.startswith("purchase"):
-                acc["total_purchase"] += (r.total or 0.0)
-            elif category.startswith("sale"):
-                acc["total_sale"] += (r.total or 0.0)
-                acc["total_revenue"] += (r.amount or 0.0)
 
-        account_ids = [aid for aid in accounts if aid is not None]
-        names = {}
+        for r in rows:
+            acc = accounts.setdefault(
+                r.account_id,
+                {
+                    "account_id": r.account_id,
+                    "categories": {},
+                    "total_invoices": 0,
+
+                    # Giá trị mua/bán
+                    "total_purchase": 0.0,
+                    "total_sale": 0.0,
+
+                    # VAT
+                    "purchase_vat": 0.0,
+                    "sale_vat": 0.0,
+                    "total_vat": 0.0,
+                    "vat_payable": 0.0,
+
+                    # Doanh thu / lợi nhuận
+                    "total_revenue": 0.0,
+                    "total_profit": 0.0,
+                },
+            )
+
+            category = (r.invoice_category or "").strip()
+            category_key = category or "khac"
+
+            amount = float(r.amount or 0)
+            vat = float(r.vat or 0)
+            total = float(r.total or 0)
+            count = int(r.count)
+
+            acc["categories"][category_key] = {
+                "count": count,
+                "amount": amount,
+                "vat": vat,
+                "total": total,
+            }
+
+            acc["total_invoices"] += count
+
+            if category.startswith("purchase_"):
+                # Tổng tiền mua vào (đã gồm VAT)
+                acc["total_purchase"] += total
+
+                # VAT đầu vào
+                acc["purchase_vat"] += vat
+
+            elif category.startswith("sale_"):
+                # Tổng tiền bán ra (đã gồm VAT)
+                acc["total_sale"] += total
+
+                # Doanh thu trước VAT
+                acc["total_revenue"] += amount
+
+                # VAT đầu ra
+                acc["sale_vat"] += vat
+
+        account_ids = [aid for aid in accounts.keys() if aid is not None]
+
+        names: Dict[int, str] = {}
         if account_ids:
             names = {
-                a.id: a.name
-                for a in db.session.query(GdtAccount).filter(GdtAccount.id.in_(account_ids)).all()
+                acc.id: acc.name
+                for acc in (
+                    db.session.query(GdtAccount)
+                    .filter(GdtAccount.id.in_(account_ids))
+                    .all()
+                )
             }
 
         result = []
+
         for aid, data in accounts.items():
             data["account_name"] = names.get(aid, "Không có tài khoản")
+
+            # Tổng VAT
+            data["total_vat"] = (
+                data["purchase_vat"]
+                + data["sale_vat"]
+            )
+
+            # VAT phải nộp
+            data["vat_payable"] = (
+                data["sale_vat"]
+                - data["purchase_vat"]
+            )
+
+            # Lợi nhuận trước VAT
+            data["total_profit"] = (
+                data["total_revenue"]
+                - data["total_purchase"]
+            )
+
             result.append(data)
 
-        result.sort(key=lambda d: d["account_name"])
+        result.sort(key=lambda x: x["account_name"])
+
         return result
 
 

@@ -16,6 +16,19 @@
   </div>
 </div>
 
+{# ── Tính mat_hang_display giống trang list — dùng get_line_items() ── #}
+{% set _items = invoice.line_items %}
+{% if _items %}
+  {% set _names = [] %}
+  {% for _it in _items %}
+    {% set _ten = _it.ten or _it.ten_hhdvu %}
+    {% if _ten %}{% set _ = _names.append(_ten) %}{% endif %}
+  {% endfor %}
+  {% set mat_hang_display = (_names | join('; ')) or invoice.mat_hang or '' %}
+{% else %}
+  {% set mat_hang_display = invoice.mat_hang or '' %}
+{% endif %}
+
 <div class="row g-3">
   <!-- ── Metadata ───────────────────────────── -->
   <div class="col-md-5">
@@ -35,6 +48,23 @@
           {{ row('Ngày phát hành', invoice.issue_date[:10] if invoice.issue_date else '—') }}
           {{ row('Trạng thái',   invoice.status) }}
           {{ row('Loại hóa đơn', invoice.invoice_type) }}
+          {# ── Loại danh mục (invoice_category) — thêm mới cho đồng bộ với list ── #}
+          {% set _cat_labels = {
+            'purchase_einvoice': 'Mua vào (e-invoice)',
+            'purchase_pos':      'Mua vào (POS)',
+            'sale_einvoice':     'Bán ra (e-invoice)',
+            'sale_pos':          'Bán ra (POS)'
+          } %}
+          <tr>
+            <td style="color:var(--text-muted); width:140px; font-size:12px;">Danh mục</td>
+            <td>
+              {% if invoice.invoice_category %}
+              <span class="badge" style="background:var(--brand-dim); color:var(--brand); border:1px solid var(--brand-border); font-size:10px;">
+                {{ _cat_labels.get(invoice.invoice_category, invoice.invoice_category) }}
+              </span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
           {{ row('Tiền tệ',      invoice.currency) }}
           {{ row('Thanh toán',   invoice.payment_method) }}
           <tr>
@@ -66,13 +96,32 @@
             <td style="color:var(--text-muted); font-size:12px;">Tiền hàng</td>
             <td style="font-family:var(--font-mono);">{{ "{:,.0f}".format(invoice.amount|float) }}</td>
           </tr>
+          {# ── Thuế suất: hiển thị breakdown nhiều dòng nếu có, giống list ── #}
+          {% set _vbd = invoice.vat_breakdown or [] %}
           <tr>
             <td style="color:var(--text-muted); font-size:12px;">Thuế suất GTGT</td>
-            <td style="font-family:var(--font-mono); color:var(--text-secondary);">{{ invoice.vat_rate or '—' }}</td>
+            <td style="font-family:var(--font-mono); color:var(--text-secondary);">
+              {% if _vbd %}
+                {% for _vb in _vbd %}
+                  <span title="{{ '{:,.0f}'.format(_vb.vat_amount) }} VND">{{ _vb.vat_rate or '?' }}</span>{% if not loop.last %}<br>{% endif %}
+                {% endfor %}
+              {% else %}
+                {{ invoice.vat_rate or '—' }}
+              {% endif %}
+            </td>
           </tr>
+          {# ── Tiền thuế: breakdown nhiều dòng nếu có nhiều mức thuế, giống list ── #}
           <tr>
             <td style="color:var(--text-muted); font-size:12px;">Thuế GTGT</td>
-            <td style="font-family:var(--font-mono); color:var(--info);">{{ "{:,.0f}".format(invoice.vat_amount|float) }}</td>
+            <td style="font-family:var(--font-mono); color:var(--info);">
+              {% if _vbd and _vbd | length > 1 %}
+                {% for _vb in _vbd %}
+                  <span title="{{ _vb.vat_rate }}">{{ '{:,.0f}'.format(_vb.vat_amount) }}</span>{% if not loop.last %}<br>{% endif %}
+                {% endfor %}
+              {% else %}
+                {{ "{:,.0f}".format(invoice.vat_amount|float) }}
+              {% endif %}
+            </td>
           </tr>
           <tr>
             <td style="color:var(--text-secondary); font-weight:600; font-size:12px;">Tổng cộng</td>
@@ -120,7 +169,11 @@
             <td>{{ value or '—' }}</td>
           </tr>
           {% endmacro %}
-          {{ erow('Mặt hàng',          invoice.mat_hang) }}
+          {# ── mat_hang: dùng mat_hang_display (ưu tiên line items, giống list) ── #}
+          <tr>
+            <td style="color:var(--text-muted); width:160px; font-size:12px;">Mặt hàng</td>
+            <td title="{{ mat_hang_display }}">{{ mat_hang_display or '—' }}</td>
+          </tr>
           {{ erow('Tháng kê khai',      invoice.thang_ke_khai) }}
           {{ erow('Ghi chú / Loại',     invoice.ghi_chu) }}
           {{ erow('Mã công trình',       invoice.ma_cong_trinh) }}
@@ -134,7 +187,13 @@
           <div class="row g-2">
             <div class="col-12">
               <label class="form-label">Mặt hàng</label>
+              {# ── Textarea edit vẫn dùng invoice.mat_hang (trường DB được lưu) ── #}
               <textarea class="form-control form-control-sm" id="f-mat-hang" rows="2">{{ invoice.mat_hang or '' }}</textarea>
+              {% if mat_hang_display and mat_hang_display != invoice.mat_hang %}
+              <div class="mt-1" style="font-size:10.5px; color:var(--text-muted);">
+                <i class="bi bi-info-circle"></i> Từ XML: <span style="font-style:italic;">{{ mat_hang_display }}</span>
+              </div>
+              {% endif %}
             </div>
             <div class="col-6">
               <label class="form-label">Tháng kê khai</label>
@@ -280,19 +339,19 @@
               {% for item in invoice.line_items %}
               <tr>
                 <td>{{ item.stt }}</td>
-                <td style="max-width:220px;">{{ item.ten_hhdvu }}</td>
-                <td style="color:var(--text-secondary);">{{ item.don_vi_tinh }}</td>
-                <td class="text-end" style="color:var(--text-secondary);">{{ item.so_luong }}</td>
+                <td style="max-width:220px;">{{ item.ten }}</td>
+                <td style="color:var(--text-secondary);">{{ item.dvtinh }}</td>
+                <td class="text-end" style="color:var(--text-secondary);">{{ item.sluong }}</td>
                 <td class="text-end" style="font-family:var(--font-mono);">
-                  {{ "{:,.0f}".format(item.don_gia|float) if item.don_gia else '' }}
+                  {{ "{:,.0f}".format(item.dgia|float) if item.dgia else '' }}
                 </td>
-                <td class="text-end" style="color:var(--text-secondary);">{{ item.ty_le_ck if item.ty_le_ck and item.ty_le_ck != 0 else '' }}</td>
+                <td class="text-end" style="color:var(--text-secondary);">{{ item.tlckhau if item.tlckhau and item.tlckhau != 0 else '' }}</td>
                 <td class="text-end" style="font-family:var(--font-mono); font-weight:600; color:var(--text-primary);">
-                  {{ "{:,.0f}".format(item.thanh_tien|float) if item.thanh_tien else '' }}
+                  {{ "{:,.0f}".format(item.thtien|float) if item.thtien else '' }}
                 </td>
-                <td class="text-end" style="color:var(--text-secondary);">{{ item.thue_suat }}</td>
+                <td class="text-end" style="color:var(--text-secondary);">{{ item.tsuat }}</td>
                 <td class="text-end" style="font-family:var(--font-mono); color:var(--info);">
-                  {{ "{:,.0f}".format(item.tien_thue|float) if item.tien_thue else '' }}
+                  {{ "{:,.0f}".format(item.tthue|float) if item.tthue else '' }}
                 </td>
               </tr>
               {% endfor %}
@@ -367,7 +426,7 @@ async function saveExtra() {
 }
 
 function showToast(msg, type) {
-  const el  = document.getElementById('edit-toast');
+  const el    = document.getElementById('edit-toast');
   const inner = document.getElementById('edit-toast-inner');
   const msgEl = document.getElementById('edit-toast-msg');
   inner.className = `toast border-${type}`;

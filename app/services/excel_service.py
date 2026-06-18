@@ -582,6 +582,20 @@ def _build_vat_sheet(ws, invoices: List[Invoice], company: dict) -> None:
 
     for month_label in all_months:
         d        = month_data[month_label]
+        has_data = any([
+            d["sale_taxable"],
+            d["sale_5pct"],
+            d["sale_kct"],
+            d["sale_vat"],
+            d["pur_amount"],
+            d["pur_vat"],
+            d["dc_tang"],
+            d["dc_giam"],
+        ])
+
+        if not has_data:
+            continue
+        
         alt_fill = _MONTH_FILL if (current_row - data_start) % 2 == 0 else None
         row      = current_row
 

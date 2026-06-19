@@ -134,10 +134,6 @@
       <div class="modal-body">
         <input type="hidden" id="edit-invoice-id" />
         <div class="row g-3">
-          <div class="col-md-12">
-            <label class="form-label fw-semibold">Mặt hàng</label>
-            <textarea id="edit-mat-hang" class="form-control" rows="2" placeholder="Mô tả mặt hàng tổng hợp"></textarea>
-          </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">Tháng kê khai</label>
             <input type="text" id="edit-thang-ke-khai" class="form-control" placeholder="QUÝ I/2026" />
@@ -535,7 +531,6 @@ function openEdit(btn) {
   try {
     const inv = JSON.parse(btn.dataset.invoice);
     document.getElementById('edit-invoice-id').value       = inv.id || '';
-    document.getElementById('edit-mat-hang').value         = inv.mat_hang        || '';
     document.getElementById('edit-thang-ke-khai').value    = inv.thang_ke_khai   || '';
     document.getElementById('edit-ghi-chu').value          = inv.ghi_chu         || '';
     document.getElementById('edit-ma-cong-trinh').value    = inv.ma_cong_trinh   || '';
@@ -553,7 +548,6 @@ function openEdit(btn) {
 async function saveEdit() {
   const id = document.getElementById('edit-invoice-id').value;
   const payload = {
-    mat_hang:            document.getElementById('edit-mat-hang').value,
     thang_ke_khai:       document.getElementById('edit-thang-ke-khai').value,
     ghi_chu:             document.getElementById('edit-ghi-chu').value,
     ma_cong_trinh:       document.getElementById('edit-ma-cong-trinh').value,

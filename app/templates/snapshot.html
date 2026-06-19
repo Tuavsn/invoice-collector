@@ -88,6 +88,16 @@
           </div>
         </div>
 
+        <!-- Export theo năm -->
+        <div class="snap-col-picker-wrap" id="year-export-wrap" style="display:none;">
+          <select class="snap-select" id="sel-export-year" style="height:28px;">
+            <option value="">— Chọn năm —</option>
+          </select>
+          <button class="snap-btn secondary" id="btn-export-year" onclick="exportYear()" disabled>
+            ⬇ Xuất theo năm
+          </button>
+        </div>
+
         {% if not active_batch %}
           <button class="snap-btn primary" id="btn-chot" disabled onclick="openChotModal()">
             Chốt batch đã chọn
@@ -367,384 +377,6 @@
 <!-- ══════════════════════════════════════════════════════ TOAST -->
 <div class="snap-toast" id="toast"></div>
 
-<style>
-/* ── Layout ─────────────────────────────────────────────────── */
-.snapshot-layout {
-  display: flex;
-  height: calc(100vh - var(--navbar-height, 56px));
-  overflow: hidden;
-  background: var(--surface-1, #f8f9fa);
-}
-
-/* ── Sidebar ─────────────────────────────────────────────────── */
-.snap-sidebar {
-  width: 200px;
-  min-width: 170px;
-  background: var(--surface-0, #fff);
-  border-right: 1px solid var(--border, #e2e8f0);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-.snap-sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 10px 7px;
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--text-muted, #64748b);
-}
-.snap-badge-new {
-  background: var(--danger, #ef4444);
-  color: #fff;
-  border-radius: 99px;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 5px;
-  min-width: 16px;
-  text-align: center;
-}
-.snap-batch-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 10px;
-  text-decoration: none;
-  color: var(--text-primary, #1e293b);
-  border-left: 3px solid transparent;
-  transition: background .15s, border-color .15s;
-  position: relative;
-}
-.snap-batch-item:hover { background: var(--surface-2, #f1f5f9); }
-.snap-batch-item.active {
-  background: var(--brand-light, #eff6ff);
-  border-left-color: var(--brand, #3b82f6);
-}
-.snap-batch-icon { font-size: 13px; flex-shrink: 0; }
-.snap-batch-info { flex: 1; min-width: 0; }
-.snap-batch-label {
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.snap-batch-meta { font-size: 10px; color: var(--text-muted, #64748b); margin-top: 1px; }
-.snap-batch-actions { display: none; gap: 3px; }
-.snap-batch-item:hover .snap-batch-actions { display: flex; }
-.snap-icon-btn {
-  background: none;
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 4px;
-  padding: 1px 4px;
-  font-size: 10px;
-  cursor: pointer;
-  color: var(--text-muted, #64748b);
-  transition: all .15s;
-}
-.snap-icon-btn:hover { background: var(--surface-2, #f1f5f9); color: var(--brand, #3b82f6); }
-.snap-icon-btn.danger:hover { background: #fee2e2; color: var(--danger, #ef4444); border-color: #fca5a5; }
-.snap-divider {
-  padding: 6px 10px 3px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .1em;
-  color: var(--text-muted, #94a3b8);
-  border-top: 1px solid var(--border, #e2e8f0);
-  margin-top: 3px;
-}
-.snap-empty-batches {
-  padding: 12px;
-  font-size: 11px;
-  color: var(--text-muted, #94a3b8);
-  text-align: center;
-}
-
-/* ── Main ────────────────────────────────────────────────────── */
-.snap-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 14px 18px;
-  gap: 10px;
-}
-.snap-main-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.snap-heading { font-size: 16px; font-weight: 700; margin: 0; }
-.snap-subheading { font-size: 11px; color: var(--text-muted, #64748b); margin-top: 2px; }
-.snap-header-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
-
-/* ── Column picker ───────────────────────────────────────────── */
-.snap-col-picker-wrap { position: relative; }
-.cat-picker-wrap { position: relative; }
-.snap-col-picker-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 500;
-  background: var(--surface-0, #fff);
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.12);
-  width: 230px;
-  max-height: 420px;
-  overflow-y: auto;
-  padding: 8px 0;
-}
-.cat-picker-wrap .snap-col-picker-menu {
-  left: 0;
-  right: auto;
-}
-.snap-col-picker-header {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 12px 8px;
-  border-bottom: 1px solid var(--border, #e2e8f0);
-  margin-bottom: 4px;
-}
-.snap-col-picker-header button {
-  background: none;
-  border: none;
-  font-size: 11px;
-  cursor: pointer;
-  color: var(--brand, #3b82f6);
-  padding: 0;
-}
-.snap-col-group-label {
-  padding: 6px 12px 2px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-muted, #94a3b8);
-  text-transform: uppercase;
-  letter-spacing: .06em;
-}
-.snap-col-pick-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--text-primary, #1e293b);
-  border-radius: 4px;
-  margin: 0 4px;
-  transition: background .1s;
-}
-.snap-col-pick-item:hover { background: var(--surface-2, #f1f5f9); }
-.snap-col-pick-item input[type=checkbox] { margin: 0; flex-shrink: 0; }
-
-/* ── Filter bar ──────────────────────────────────────────────── */
-.snap-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.snap-input {
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-size: 11px;
-  background: var(--surface-0, #fff);
-  color: var(--text-primary, #1e293b);
-  outline: none;
-  transition: border-color .15s;
-}
-.snap-input:focus { border-color: var(--brand, #3b82f6); }
-.snap-input.full { width: 100%; box-sizing: border-box; }
-.snap-select {
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-size: 11px;
-  background: var(--surface-0, #fff);
-  color: var(--text-primary, #1e293b);
-  cursor: pointer;
-}
-.snap-filter-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  width: 100%;
-}
-.snap-filter-tag {
-  background: var(--brand-dim, #eff6ff);
-  color: var(--brand, #3b82f6);
-  border: 1px solid var(--brand-border, #bfdbfe);
-  border-radius: 99px;
-  padding: 1px 8px;
-  font-size: 10px;
-}
-
-/* ── Select bar ──────────────────────────────────────────────── */
-.snap-select-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 10px;
-  background: var(--surface-2, #f1f5f9);
-  border-radius: 8px;
-  font-size: 11px;
-}
-.snap-check-all { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.snap-selected-info { color: var(--brand, #3b82f6); font-weight: 600; }
-.snap-count-pill {
-  background: #fff;
-  color: var(--brand, #3b82f6);
-  border-radius: 99px;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 1px 8px;
-  margin-left: 4px;
-}
-
-/* ── Table ───────────────────────────────────────────────────── */
-.snap-table-wrap { flex: 1; overflow: auto; border-radius: 8px; border: 1px solid var(--border, #e2e8f0); }
-.snap-table { width: 100%; border-collapse: collapse; font-size: 11px; background: var(--surface-0, #fff); }
-.snap-table thead tr {
-  background: var(--surface-2, #f8fafc);
-  border-bottom: 2px solid var(--border, #e2e8f0);
-}
-.snap-table th {
-  padding: 7px 8px;
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--text-muted, #64748b);
-  text-align: left;
-  white-space: nowrap;
-}
-.snap-table th.num, .snap-table td.num { text-align: right; }
-.snap-table td { padding: 6px 8px; border-bottom: 1px solid var(--border, #f1f5f9); vertical-align: middle; }
-.snap-row:hover td { background: var(--surface-2, #f8fafc); }
-.snap-row.row-purchase td:first-child { border-left: 2px solid var(--brand, #3b82f6); }
-.snap-row.row-sale td:first-child { border-left: 2px solid var(--success, #22c55e); }
-.col-chk { width: 28px; text-align: center; }
-.mono { font-family: var(--font-mono, monospace); font-size: 10.5px; }
-.muted { color: var(--text-muted, #94a3b8); }
-.bold { font-weight: 700; }
-.snap-link { color: var(--brand, #3b82f6); text-decoration: none; font-weight: 600; }
-.snap-link:hover { text-decoration: underline; }
-.snap-party { font-weight: 500; }
-.snap-tag {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 99px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .04em;
-}
-.tag-purchase { background: #dbeafe; color: #1d4ed8; }
-.tag-sale     { background: #dcfce7; color: #15803d; }
-.tag-status   { background: var(--success-bg,#f0fdf4); color: var(--success,#22c55e); border: 1px solid var(--success-border,#bbf7d0); }
-.snap-empty { text-align: center; padding: 24px; color: var(--text-muted, #94a3b8); }
-.snap-total-row td {
-  background: var(--surface-2, #f8fafc);
-  font-weight: 700;
-  font-size: 11px;
-  border-top: 2px solid var(--border, #e2e8f0);
-}
-.total-label { color: var(--text-muted, #64748b); font-size: 10px; letter-spacing: .05em; }
-.vnd { font-family: var(--font-mono, monospace); }
-.vnd-muted { color: var(--text-secondary, #475569); }
-.vnd-tax   { color: var(--warning, #f59e0b); }
-.vnd-total { color: var(--brand, #3b82f6); font-weight: 700; }
-
-/* ── Pagination ──────────────────────────────────────────────── */
-.snap-pagination {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: flex-end;
-  font-size: 11px;
-}
-.snap-page-info { color: var(--text-muted, #64748b); }
-
-/* ── Buttons ─────────────────────────────────────────────────── */
-.snap-btn {
-  padding: 5px 12px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: all .15s;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-.snap-btn.primary { background: var(--brand, #3b82f6); color: #fff; }
-.snap-btn.primary:hover:not(:disabled) { background: #2563eb; }
-.snap-btn.primary:disabled { opacity: .45; cursor: not-allowed; }
-.snap-btn.secondary { background: var(--surface-0, #fff); color: var(--text-primary, #1e293b); border: 1px solid var(--border, #e2e8f0); }
-.snap-btn.secondary:hover { background: var(--surface-2, #f1f5f9); }
-.snap-btn.ghost { background: transparent; color: var(--text-muted, #64748b); border: 1px solid var(--border, #e2e8f0); }
-.snap-btn.ghost:hover { background: var(--surface-2, #f1f5f9); }
-
-/* ── Modal ───────────────────────────────────────────────────── */
-.snap-modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.45);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.snap-modal {
-  background: var(--surface-0, #fff);
-  border-radius: 12px;
-  width: 440px;
-  max-width: 95vw;
-  box-shadow: 0 20px 60px rgba(0,0,0,.2);
-}
-.snap-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--border, #e2e8f0);
-}
-.snap-modal-header h2 { font-size: 14px; font-weight: 700; margin: 0; }
-.snap-modal-close { background: none; border: none; font-size: 16px; cursor: pointer; color: var(--text-muted, #64748b); padding: 2px 5px; }
-.snap-modal-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; }
-.snap-modal-desc { font-size: 12px; color: var(--text-secondary, #475569); margin: 0 0 4px; }
-.snap-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border, #e2e8f0); }
-.snap-label { font-size: 11px; font-weight: 600; color: var(--text-secondary, #475569); }
-.snap-label.mt { margin-top: 3px; }
-.required { color: var(--danger, #ef4444); }
-
-/* ── Toast ───────────────────────────────────────────────────── */
-.snap-toast {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  box-shadow: 0 4px 16px rgba(0,0,0,.15);
-  z-index: 2000;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: all .25s;
-  pointer-events: none;
-}
-.snap-toast.show { opacity: 1; transform: translateY(0); }
-.snap-toast.ok  { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-.snap-toast.err { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-</style>
-
 <script>
 // ── Category multi-select picker ──────────────────────────────────────────
 const CAT_LABELS = {
@@ -965,6 +597,79 @@ function onMonthChange() {
   }
 }
 
+// ── Export theo năm ─────────────────────────────────────────────
+async function loadExportYears() {
+  const params    = new URLSearchParams(window.location.search);
+  const accountId = params.get('account_id');
+  const wrap      = document.getElementById('year-export-wrap');
+  const sel       = document.getElementById('sel-export-year');
+  const btn       = document.getElementById('btn-export-year');
+
+  if (!accountId) {
+    wrap.style.display = 'none';
+    return;
+  }
+
+  try {
+    const res  = await fetch(`/snapshot/api/years?account_id=${accountId}`);
+    const data = await res.json();
+    if (!data.ok || !data.years || data.years.length === 0) {
+      wrap.style.display = 'none';
+      return;
+    }
+    sel.innerHTML = '<option value="">— Chọn năm —</option>' +
+      data.years.map(y => `<option value="${y}">Năm ${y}</option>`).join('');
+    wrap.style.display = 'flex';
+    btn.disabled = true;
+  } catch (e) {
+    wrap.style.display = 'none';
+  }
+}
+
+document.getElementById('sel-export-year')?.addEventListener('change', function () {
+  document.getElementById('btn-export-year').disabled = !this.value;
+});
+
+async function exportYear() {
+  const params    = new URLSearchParams(window.location.search);
+  const accountId = params.get('account_id') ? parseInt(params.get('account_id')) : null;
+  const year      = parseInt(document.getElementById('sel-export-year').value);
+
+  if (!accountId) {
+    showToast('Vui lòng chọn công ty trước khi xuất theo năm.', 'err');
+    return;
+  }
+  if (!year) {
+    showToast('Vui lòng chọn năm.', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('btn-export-year');
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Đang xuất…';
+
+  try {
+    const res  = await fetch('/snapshot/api/export/year', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year, account_id: accountId }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`✓ Đã xuất bảng kê năm ${year}`, 'ok');
+      window.location.href = `/snapshot/download/${data.file}`;
+    } else {
+      showToast(`Lỗi: ${data.error}`, 'err');
+    }
+  } catch (e) {
+    showToast(`Lỗi kết nối: ${e}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
 function openChotModal() {
   if (selectedIds.size === 0) return;
   const params = new URLSearchParams(window.location.search);
@@ -1084,6 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
   buildSnapColPicker();
   applySnapColVisibility();
   updateCatPickerLabel();
+  loadExportYears();
 
   if (document.getElementById('start_date')) {
     flatpickr("#start_date", {

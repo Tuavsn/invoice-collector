@@ -90,7 +90,7 @@ def api_list():
 # ──────────────────────────────────────────── Extra fields PATCH endpoint
 
 _EXTRA_FIELDS = {
-    "mat_hang", "thang_ke_khai", "payment_note", "bank_name",
+    "thang_ke_khai", "payment_note", "bank_name",
     "ghi_chu", "ma_cong_trinh", "so_hop_dong", "ngay_hop_dong",
     "hd_ban_ra_tuong_ung",
 }

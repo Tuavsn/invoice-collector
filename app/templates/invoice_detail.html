@@ -185,16 +185,6 @@
         </table>
         <div id="extra-edit" style="display:none;" class="p-3">
           <div class="row g-2">
-            <div class="col-12">
-              <label class="form-label">Mặt hàng</label>
-              {# ── Textarea edit vẫn dùng invoice.mat_hang (trường DB được lưu) ── #}
-              <textarea class="form-control form-control-sm" id="f-mat-hang" rows="2">{{ invoice.mat_hang or '' }}</textarea>
-              {% if mat_hang_display and mat_hang_display != invoice.mat_hang %}
-              <div class="mt-1" style="font-size:10.5px; color:var(--text-muted);">
-                <i class="bi bi-info-circle"></i> Từ XML: <span style="font-style:italic;">{{ mat_hang_display }}</span>
-              </div>
-              {% endif %}
-            </div>
             <div class="col-6">
               <label class="form-label">Tháng kê khai</label>
               <input class="form-control form-control-sm" id="f-thang-ke-khai" value="{{ invoice.thang_ke_khai or '' }}" placeholder="QUÝ I/2026" />
@@ -397,7 +387,6 @@ function cancelEdit() {
 
 async function saveExtra() {
   const payload = {
-    mat_hang:            document.getElementById('f-mat-hang').value,
     thang_ke_khai:       document.getElementById('f-thang-ke-khai').value,
     ghi_chu:             document.getElementById('f-ghi-chu').value,
     ma_cong_trinh:       document.getElementById('f-ma-cong-trinh').value,

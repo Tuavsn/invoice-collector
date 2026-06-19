@@ -8,8 +8,10 @@ Routes:
   DELETE /snapshot/api/batch/<id>     → xoá batch (giải phóng HĐ về "mới")
   GET  /snapshot/api/new              → JSON danh sách HĐ mới (AJAX/filter)
   GET  /snapshot/api/stats            → đếm HĐ mới + tổng batch
+  GET  /snapshot/api/years            → danh sách năm có batch (cho 1 account)
   POST /snapshot/api/export/new       → export Excel HĐ mới
   POST /snapshot/api/export/batch/<id>→ export Excel một batch
+  POST /snapshot/api/export/year      → export Excel gộp các batch theo năm
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ from typing import List, Optional
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
 from app.db.repository import SnapshotRepository, GdtAccountRepository
-from app.services.excel_service import ExcelService
+from app.services.excel_service import ExcelService, _parse_batch_month_year
 
 bp = Blueprint("snapshot", __name__, url_prefix="/snapshot")
 
@@ -109,6 +111,24 @@ def api_stats():
         "batch_count": len(batches),
         "batches":     [b.to_dict() for b in batches],
     })
+
+
+@bp.get("/api/years")
+def api_years():
+    """
+    Danh sách các năm có batch (đã chốt) — dùng cho dropdown 'Xuất theo năm'.
+    Yêu cầu account_id vì việc xuất theo năm gắn với một công ty cụ thể.
+    """
+    account_id = _parse_int(request.args.get("account_id", ""))
+    if not account_id:
+        return jsonify(ok=False, error="Thiếu account_id."), 400
+
+    batches = SnapshotRepository.get_all(account_id=account_id)
+    years = sorted(
+        {y for b in batches for _, y in [_parse_batch_month_year(b.label)] if y},
+        reverse=True,
+    )
+    return jsonify(ok=True, years=years)
 
 
 @bp.get("/api/new")
@@ -247,6 +267,30 @@ def api_export_batch(batch_id: int):
     try:
         path = ExcelService.export_from_list(invoices, label=batch.label, account_id=batch.account_id)
         return jsonify(ok=True, file=path.name, path=str(path))
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc)), 500
+
+
+@bp.post("/api/export/year")
+def api_export_year():
+    """
+    Export Excel gộp toàn bộ các batch (tháng) đã chốt trong một năm,
+    cho một tài khoản. Body JSON: { "year": 2026, "account_id": 1 }
+    """
+    data       = request.get_json(force=True, silent=True) or {}
+    year       = _parse_int(str(data.get("year") or ""))
+    account_id = _parse_int(str(data.get("account_id") or ""))
+
+    if not year:
+        return jsonify(ok=False, error="Vui lòng chọn năm."), 400
+    if not account_id:
+        return jsonify(ok=False, error="Vui lòng chọn công ty."), 400
+
+    try:
+        path = ExcelService.export_by_year(year=year, account_id=account_id)
+        return jsonify(ok=True, file=path.name, path=str(path))
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
     except Exception as exc:
         return jsonify(ok=False, error=str(exc)), 500
 

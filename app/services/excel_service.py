@@ -7,10 +7,16 @@ Fixes:
   - mat_hang resolved from line_items_json when empty
   - Company header (name / tax code / address) read from AppSetting
   - _safe_sheet() strips invalid Excel sheet-name characters
+
+New:
+  - export_by_year(): gộp các batch (tháng) đã chốt trong một năm cho một
+    tài khoản vào một file Excel duy nhất, mỗi tháng/batch là một nhóm có
+    hàng TỔNG cắt ngang — ở cả sheet MUA VÀO và BÁN RA.
 """
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -91,6 +97,21 @@ _BAN_RA_COLS = [
     ("Tháng kê khai",                 14,  "thang_ke_khai"),
     ("Ghi chú",                       22,  "ghi_chu"),
 ]
+
+
+# ── Batch label parsing (dùng cho export theo năm) ─────────────────────────
+# Khớp với format được sinh ở snapshot.html: `Tháng ${month}/${year}`
+_BATCH_MONTH_RE = re.compile(r"(\d{1,2})\s*/\s*(\d{4})")
+
+
+def _parse_batch_month_year(label: str):
+    """Trích (tháng, năm) từ batch label dạng 'Tháng 3/2026'. Trả (None, None) nếu không khớp."""
+    if not label:
+        return None, None
+    m = _BATCH_MONTH_RE.search(label)
+    if not m:
+        return None, None
+    return int(m.group(1)), int(m.group(2))
 
 
 # ── Company info ───────────────────────────────────────────────────────────
@@ -219,11 +240,87 @@ class ExcelService:
         logger.info("Snapshot Excel saved: {}", dest)
         return dest
 
+    @staticmethod
+    def export_by_year(year: int, account_id: int) -> Path:
+        """
+        Xuất toàn bộ hóa đơn đã chốt theo các batch (tháng) trong một năm,
+        cho một tài khoản. Mỗi tháng/batch là một nhóm, có hàng TỔNG cắt
+        ngang giữa các tháng — ở cả sheet MUA VÀO và BÁN RA.
+
+        Batch label phải có dạng "Tháng M/YYYY" (đúng format được sinh tự
+        động khi chốt batch trong UI) thì mới được nhận diện thuộc năm nào.
+        """
+        from app.db.repository import SnapshotRepository  # tránh import vòng
+
+        Config.EXPORT_PATH.mkdir(parents=True, exist_ok=True)
+
+        company = _get_company_info(account_id=account_id)
+        if not company["name"] and not company["tax_code"]:
+            raise ValueError("Vui lòng chọn công ty trước khi xuất Excel.")
+
+        batches = SnapshotRepository.get_all(account_id=account_id)
+
+        year_batches = []
+        for b in batches:
+            m, y = _parse_batch_month_year(b.label)
+            if y == year:
+                year_batches.append((m or 0, b))
+        year_batches.sort(key=lambda t: t[0])
+
+        if not year_batches:
+            raise ValueError(f"Không có batch nào trong năm {year} cho công ty đã chọn.")
+
+        all_invoices: List[Invoice] = []
+        mua_groups: list = []
+        ban_groups: list = []
+
+        for _, b in year_batches:
+            inv_list = SnapshotRepository.get_batch_for_export(b.id)
+            if not inv_list:
+                continue
+            all_invoices.extend(inv_list)
+            mua = [i for i in inv_list if not (i.invoice_category or "").startswith("sale_")]
+            ban = [i for i in inv_list if     (i.invoice_category or "").startswith("sale_")]
+            if mua:
+                mua_groups.append((b.label, mua))
+            if ban:
+                ban_groups.append((b.label, ban))
+
+        if not all_invoices:
+            raise ValueError(f"Không có hóa đơn nào trong năm {year}.")
+
+        dest = Config.EXPORT_PATH / f"bang_ke_nam_{year}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+        wb = Workbook()
+        ws_mua       = wb.active
+        ws_mua.title = "MUA VÀO"
+        mua_flat     = [i for _, lst in mua_groups for i in lst]
+        _build_sheet(ws_mua, f"MUA VÀO — Năm {year}", mua_flat, _MUA_VAO_COLS,
+                     is_purchase=True, company=company, groups=mua_groups)
+
+        ws_ban   = wb.create_sheet("BÁN RA")
+        ban_flat = [i for _, lst in ban_groups for i in lst]
+        _build_sheet(ws_ban, f"BÁN RA — Năm {year}", ban_flat, _BAN_RA_COLS,
+                     is_purchase=False, company=company, groups=ban_groups)
+
+        ws_vat = wb.create_sheet("VAT")
+        _build_vat_sheet(ws_vat, all_invoices, company)
+
+        wb.save(str(dest))
+        logger.info("Yearly Excel report saved: {} ({} batches)", dest, len(year_batches))
+        return dest
+
 
 # ── Sheet builder ──────────────────────────────────────────────────────────
 
 def _build_sheet(ws, sheet_label: str, invoices: List[Invoice],
-                 col_defs: list, is_purchase: bool, company: dict) -> None:
+                 col_defs: list, is_purchase: bool, company: dict,
+                 groups: Optional[list] = None) -> None:
+    """
+    groups: list các tuple (label, invoices) đã được nhóm sẵn từ bên ngoài
+    (vd. theo batch/tháng cho export theo năm). Nếu None, tự nhóm theo
+    `thang_ke_khai` như hành vi cũ (_group_by_ky).
+    """
     num_cols = len(col_defs)
     last_col = get_column_letter(num_cols)
 
@@ -269,7 +366,7 @@ def _build_sheet(ws, sheet_label: str, invoices: List[Invoice],
     ws.freeze_panes = "A7"
 
     # Data rows
-    groups = _group_by_ky(invoices)
+    groups = groups if groups is not None else _group_by_ky(invoices)
     current_row  = 7
     grand_amount = grand_vat = grand_total = 0.0
 
@@ -351,15 +448,20 @@ def _write_subtotal_row(ws, row, num_cols, label, amount, vat, total,
 def _invoice_to_row(inv: Invoice, stt: int, col_defs: list) -> list:
     date_str = inv.issue_date.strftime("%d/%m/%Y") if inv.issue_date else ""
 
-    # mat_hang: DB field → fallback aggregate từ line_items_json
-    mat_hang = inv.mat_hang or ""
-    if not mat_hang and inv.line_items_json:
+    mat_hang = ""
+    if inv.line_items_json:
         try:
-            items    = json.loads(inv.line_items_json)
-            names    = [it.get("ten_hhdvu") or "" for it in items if it.get("ten_hhdvu")]
+            items = json.loads(inv.line_items_json)
+            names = []
+            for it in items:
+                ten = it.get("ten") or it.get("ten_hhdvu")
+                if ten:
+                    names.append(ten)
             mat_hang = "; ".join(names)
         except Exception:
             pass
+    if not mat_hang:
+        mat_hang = inv.mat_hang or ""
 
     row = []
     for _, _, field in col_defs:

@@ -106,7 +106,7 @@ class Invoice(db.Model):  # type: ignore[name-defined]
     __tablename__ = "invoices"
     __table_args__ = (
         UniqueConstraint(
-            "invoice_no", "invoice_symbol", "invoice_form", "invoice_category",
+            "invoice_no", "invoice_symbol", "invoice_form", "invoice_category", "account_id",
             name="uq_invoice_no_symbol_form_category",
         ),
     )

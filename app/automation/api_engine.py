@@ -29,12 +29,14 @@ _CRAWL_PLAN: List[Tuple[str, str, Optional[int], str]] = [
     ("sale_pos",            "/api/sco-query/invoices/sold",     None, "Bán ra - HĐ máy tính tiền"),
     ("purchase_einvoice_5", "/api/query/invoices/purchase",     5,    "Mua vào - Đã cấp HĐ - điện tử"),
     ("purchase_pos_5",      "/api/sco-query/invoices/purchase", 5,    "Mua vào - Đã cấp HĐ - máy tính tiền"),
-    ("purchase_einvoice_6", "/api/query/invoices/purchase",     6,    "Mua vào - Cục thuế không nhận mã"),
-    ("purchase_einvoice_8", "/api/query/invoices/purchase",     8,    "Mua vào - Cục thuế đã nhận có mã"),
+    ("purchase_einvoice_6", "/api/query/invoices/purchase",     6,    "Mua vào - Cục thuế không nhận mã - điện tử"),
+    ("purchase_pos_6",      "/api/sco-query/invoices/purchase", 6,    "Mua vào - Cục thuế không nhận mã - máy tính tiền"),
+    ("purchase_einvoice_8", "/api/query/invoices/purchase",     8,    "Mua vào - Cục thuế đã nhận có mã - điện tử"),
+    ("purchase_pos_8",      "/api/sco-query/invoices/purchase", 8,    "Mua vào - Cục thuế đã nhận có mã - máy tính tiền"),
 ]
 
 _DB_FIELDS = [
-    "invoice_no", "invoice_symbol", "invoice_form", "invoice_type", "invoice_category",
+    "invoice_no", "invoice_symbol", "invoice_form", "invoice_type", "invoice_category", "account_id",
     "status", "currency", "exchange_rate", "payment_method",
     "xml_version", "software_tax_code", "is_adjustment", "portal_link", "fkey",
     "seller_signing_time", "tax_signing_time",
@@ -172,13 +174,29 @@ class GdtApiClient:
 
         return all_items
 
-    async def export_xml(self, nbmst: str, khhdon: str, shdon: str, khmshdon: str) -> Optional[bytes]:
+    async def export_xml(
+        self,
+        nbmst: str,
+        khhdon: str,
+        shdon: str,
+        khmshdon: str,
+        path_prefix: str = "/api/query",
+    ) -> Optional[bytes]:
         params = {"nbmst": nbmst, "khhdon": khhdon, "shdon": shdon, "khmshdon": khmshdon}
-        return await self._get(GDT_BASE + "/api/query/invoices/export-xml?" + urlencode(params))
+        url = GDT_BASE + f"{path_prefix}/invoices/export-xml?" + urlencode(params)
+        return await self._get(url)
 
-    async def get_detail(self, nbmst: str, khhdon: str, shdon: str, khmshdon: str) -> Optional[bytes]:
+    async def get_detail(
+        self,
+        nbmst: str,
+        khhdon: str,
+        shdon: str,
+        khmshdon: str,
+        path_prefix: str = "/api/query",
+    ) -> Optional[bytes]:
         params = {"nbmst": nbmst, "khhdon": khhdon, "shdon": shdon, "khmshdon": khmshdon}
-        return await self._get(GDT_BASE + "/api/query/invoices/detail?" + urlencode(params))
+        url = GDT_BASE + f"{path_prefix}/invoices/detail?" + urlencode(params)
+        return await self._get(url)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -859,7 +877,7 @@ class ApiCrawlerEngine:
         self.emit_captcha_fn    = emit_captcha_fn
         self.captcha_event      = captcha_event
         self.get_captcha_answer = get_captcha_answer
-        self._browser           = BrowserManager()
+        self._browser           = BrowserManager(username=self.username)
         self._jwt: str          = ""
         self._total_to_process  = 0
         self._total_processed   = 0
@@ -944,6 +962,10 @@ class ApiCrawlerEngine:
             for cat, path, ttxly, label in _CRAWL_PLAN:
                 if self._stop:
                     break
+
+                # Extract "/api/query" hoặc "/api/sco-query" từ path
+                path_prefix = "/" + "/".join(path.strip("/").split("/")[:2])
+
                 log_buffer: List[str] = []
                 try:
                     items = await client.list_invoices(
@@ -970,6 +992,9 @@ class ApiCrawlerEngine:
                     inv = _map_inv(raw)
                     if not inv["invoice_no"]:
                         continue
+
+                    inv["_api_path_prefix"] = path_prefix
+
                     key = _dedup_key(inv, cat)
                     if key not in seen:
                         seen.add(key)
@@ -1037,9 +1062,10 @@ class ApiCrawlerEngine:
             logger.error("invoice_category is None cho #{}", inv.get("invoice_no"))
             return None
 
-        invoice_no = inv["invoice_no"]
-        issue_date = _parse_gdt_date(inv["issue_date"])
-        inv_dir    = ensure_invoice_dir(invoice_no, issue_date, suffix=invoice_category)
+        invoice_no  = inv["invoice_no"]
+        issue_date  = _parse_gdt_date(inv["issue_date"])
+        inv_dir     = ensure_invoice_dir(invoice_no, issue_date, suffix=invoice_category)
+        path_prefix = inv.get("_api_path_prefix", "/api/query")
 
         nbmst    = inv["seller_tax_code"]
         khhdon   = inv["invoice_symbol"]
@@ -1057,8 +1083,8 @@ class ApiCrawlerEngine:
 
         # ── Fetch song song ──────────────────────────────────────────────────
         zip_bytes, detail_bytes = await asyncio.gather(
-            client.export_xml(nbmst, khhdon, shdon, khmshdon),
-            client.get_detail(nbmst, khhdon, shdon, khmshdon),
+            client.export_xml(nbmst, khhdon, shdon, khmshdon, path_prefix=path_prefix),
+            client.get_detail(nbmst, khhdon, shdon, khmshdon, path_prefix=path_prefix),
         )
 
         # ── Parse detail JSON ────────────────────────────────────────────────
@@ -1258,6 +1284,7 @@ class ApiCrawlerEngine:
                     invoice_symbol=inv["invoice_symbol"] or None,
                     invoice_form=inv["invoice_form"]     or None,
                     invoice_category=category,
+                    account_id=self.account_id,
                 )
                 if not existing:
                     return False

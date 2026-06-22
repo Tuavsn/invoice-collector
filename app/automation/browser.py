@@ -10,11 +10,18 @@ from app.config import Config
 
 
 class BrowserManager:
-    def __init__(self, session_file: Optional[str] = None) -> None:
+    def __init__(self, session_file: Optional[str] = None, username: Optional[str] = None) -> None:
         self._playwright: Optional[Playwright] = None
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
-        self._session_path: Path = Path(session_file) if session_file else Config.SESSION_PATH
+        if session_file:
+            self._session_path = Path(session_file)
+        elif username:
+            # Mỗi username có session riêng
+            safe_name = "".join(c if c.isalnum() else "_" for c in username)
+            self._session_path = Config.SESSION_PATH.parent / f"session_{safe_name}.json"
+        else:
+            self._session_path = Config.SESSION_PATH
 
     @property
     def has_saved_session(self) -> bool:

@@ -161,44 +161,11 @@
       </div>
     </div>
 
-    <!-- Progress Card -->
+    <!-- Progress Card — danh sách progress riêng theo từng account -->
     <div class="card mt-3" id="progress-card" style="display:none !important;">
       <div class="card-header"><i class="bi bi-activity"></i> Progress</div>
-      <div class="card-body p-4">
-
-        <!-- Phase label -->
-        <div id="prog-chunk-label" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--brand); margin-bottom:6px; min-height:16px;"></div>
-
-        <!-- % bar -->
-        <div class="d-flex justify-content-between mb-2" style="font-size:12px; color:var(--text-secondary);">
-          <span id="prog-label">Initialising…</span>
-          <span id="prog-pct" style="font-weight:700; color:var(--brand); font-family:var(--font-mono);">–</span>
-        </div>
-        <div class="progress mb-1" style="height:10px; border-radius:6px;">
-          <div id="prog-bar" class="progress-bar progress-bar-striped progress-bar-animated"
-               style="width:0%; transition:width 0.35s ease;"></div>
-        </div>
-        <div id="prog-eta" style="font-size:10px; color:var(--text-muted); text-align:right; margin-top:3px; min-height:14px; font-family:var(--font-mono);"></div>
-
-        <!-- Stats 4 cột -->
-        <div class="row mt-3 text-center" style="font-size:12px;">
-          <div class="col">
-            <div id="stat-total" class="fw-bold" style="font-size:22px; font-family:var(--font-mono); color:var(--brand);">–</div>
-            <div style="color:var(--text-muted); margin-top:2px; font-size:11px;">Cần tải</div>
-          </div>
-          <div class="col">
-            <div id="stat-done" class="fw-bold" style="font-size:22px; font-family:var(--font-mono); color:var(--success);">0</div>
-            <div style="color:var(--text-muted); margin-top:2px; font-size:11px;">Thành công</div>
-          </div>
-          <div class="col">
-            <div id="stat-fail" class="fw-bold" style="font-size:22px; font-family:var(--font-mono); color:var(--danger);">0</div>
-            <div style="color:var(--text-muted); margin-top:2px; font-size:11px;">Lỗi</div>
-          </div>
-          <div class="col">
-            <div id="stat-skip" class="fw-bold" style="font-size:22px; font-family:var(--font-mono); color:var(--text-muted);">0</div>
-            <div style="color:var(--text-muted); margin-top:2px; font-size:11px;">Bỏ qua</div>
-          </div>
-        </div>
+      <div class="card-body p-3" id="progress-accounts-wrap" style="display:flex; flex-direction:column; gap:10px;">
+        <!-- Mỗi account-progress-block được tạo dynamic bởi JS (xem _ensureProgressBlock) -->
       </div>
     </div>
   </div>
@@ -207,8 +174,12 @@
   <div class="col-md-7">
     <div id="captcha-container" style="margin-bottom:8px;"></div>
     <div class="card h-100">
-      <div class="card-header">
+      <div class="card-header" style="flex-wrap:wrap; gap:6px;">
         <i class="bi bi-terminal"></i> Live Logs
+        <div id="log-tabs" style="display:flex; gap:4px; flex-wrap:wrap; margin-left:10px;">
+          <button class="btn btn-sm log-tab-btn active" data-tab="all" onclick="switchLogTab('all')" style="font-size:11px; padding:2px 10px;">Tất cả</button>
+          <!-- Tab theo account được thêm dynamic -->
+        </div>
         <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="clearLogs()">
           <i class="bi bi-trash3"></i> Clear
         </button>
@@ -275,39 +246,33 @@ const btnStart = document.getElementById('btn-start');
 const btnStop  = document.getElementById('btn-stop');
 const progCard = document.getElementById('progress-card');
 
-// ── Phase & progress state ─────────────────────────────────────────────────────
-let _phase      = 'idle';   // 'idle' | 'gather' | 'process' | 'done'
-let _totalKnown = false;
-let _startTs    = null;     // timestamp khi bắt đầu phase process (để tính ETA)
+// ── Per-account phase & progress state ──────────────────────────────────────
+// key: account_id (number) hoặc '_legacy' cho account_id == null
+const _accStates = {};   // { [key]: { phase, totalKnown, startTs } }
+let   _activeLogTab = 'all';
+const _logTabsSeen  = new Set();   // các key đã có tab log
+const _logBuffers   = {};          // { [key]: [{html, level}], all: [...] }
+_logBuffers['all'] = [];
 
-function _updatePhaseLabel() {
-  const el = document.getElementById('prog-chunk-label');
-  if (!el) return;
+function _accKey(account_id) {
+  return account_id === null || account_id === undefined ? '_legacy' : String(account_id);
+}
+
+function _getAccState(key) {
+  if (!_accStates[key]) {
+    _accStates[key] = { phase: 'idle', totalKnown: false, startTs: null };
+  }
+  return _accStates[key];
+}
+
+function _phaseLabel(phase) {
   const labels = {
     idle:    '',
     gather:  '📡 Phase 1 — Thu thập danh sách hóa đơn…',
     process: '⚡ Phase 2 — Tải & xử lý song song…',
     done:    '✅ Hoàn thành',
   };
-  el.textContent = labels[_phase] || '';
-}
-
-function _resetProgress() {
-  _phase      = 'gather';
-  _totalKnown = false;
-  _startTs    = null;
-  document.getElementById('stat-total').textContent = '–';
-  document.getElementById('stat-done').textContent  = '0';
-  document.getElementById('stat-fail').textContent  = '0';
-  document.getElementById('stat-skip').textContent  = '0';
-  const bar = document.getElementById('prog-bar');
-  bar.style.width = '0%';
-  bar.classList.add('progress-bar-striped', 'progress-bar-animated');
-  document.getElementById('prog-pct').textContent   = '–';
-  document.getElementById('prog-label').textContent = 'Thu thập danh sách hóa đơn…';
-  document.getElementById('prog-eta').textContent   = '';
-  _updatePhaseLabel();
-  progCard.style.setProperty('display', 'block', 'important');
+  return labels[phase] || '';
 }
 
 // ── Account selection ──────────────────────────────────────────────────────────
@@ -514,7 +479,7 @@ socket.on('crawler_captcha', (data) => {
   widget.querySelector('.captcha-input').value = '';
   widget.style.display = 'block';
   setTimeout(() => widget.querySelector('.captcha-input').focus(), 100);
-  appendLog(`🖼 Captcha${data.account_name ? ' (' + data.account_name + ')' : ''} — vui lòng nhập mã…`, 'warn');
+  appendLog(`🖼 Captcha${data.account_name ? ' (' + data.account_name + ')' : ''} — vui lòng nhập mã…`, 'warn', data.account_id);
 });
 socket.on('crawler_done', (data) => {
   if (data && data.account_id != null) {
@@ -555,42 +520,97 @@ async function refreshCaptcha(key) {
   } catch(e) {}
 }
 
-// ── Log helpers ───────────────────────────────────────────────────────────────
-function appendLog(msg, level = 'info') {
-  const line = document.createElement('div');
-  line.className = `log-${level}`;
-  const ts = new Date().toLocaleTimeString('vi-VN');
-  line.textContent = `[${ts}] ${msg}`;
-  logEl.appendChild(line);
+// ── Log tabs (theo account) ───────────────────────────────────────────────────
+function _ensureLogTab(account_id) {
+  const key = _accKey(account_id);
+  if (key === '_legacy' || _logTabsSeen.has(key)) return;
+  _logTabsSeen.add(key);
+  _logBuffers[key] = [];
+  const tabsEl = document.getElementById('log-tabs');
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-sm log-tab-btn';
+  btn.dataset.tab = key;
+  btn.textContent = _accountNameById(account_id);
+  btn.style.cssText = 'font-size:11px; padding:2px 10px;';
+  btn.onclick = () => switchLogTab(key);
+  tabsEl.appendChild(btn);
+}
+
+function switchLogTab(key) {
+  _activeLogTab = key;
+  document.querySelectorAll('.log-tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === key);
+  });
+  _renderLogTerminal();
+}
+
+function _renderLogTerminal() {
+  const buf = _logBuffers[_activeLogTab] || [];
+  logEl.innerHTML = buf.length
+    ? buf.map(l => `<div class="log-${l.level}">${l.text}</div>`).join('')
+    : '<span class="log-info">▶ Chưa có log…</span>';
   logEl.scrollTop = logEl.scrollHeight;
 }
+
+// ── Log helpers ───────────────────────────────────────────────────────────────
+function _escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function appendLog(msg, level = 'info', account_id) {
+  const ts   = new Date().toLocaleTimeString('vi-VN');
+  const text = `[${ts}] ${_escHtml(msg)}`;
+  const key  = account_id !== undefined ? _accKey(account_id) : 'all';
+
+  if (key !== 'all') _ensureLogTab(account_id);
+
+  // Lưu vào buffer "all" (mọi log) và buffer riêng của account (nếu có)
+  _logBuffers['all'].push({ text, level });
+  if (key !== 'all' && key !== '_legacy') {
+    _logBuffers[key].push({ text, level });
+  } else if (key === '_legacy') {
+    _logBuffers['_legacy'] = _logBuffers['_legacy'] || [];
+    _logBuffers['_legacy'].push({ text, level });
+  }
+
+  // Chỉ render lên DOM nếu tab đang xem khớp ('all' luôn nhận mọi log)
+  if (_activeLogTab === 'all' || _activeLogTab === key) {
+    const line = document.createElement('div');
+    line.className = `log-${level}`;
+    line.innerHTML = text;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
 function clearLogs() {
+  Object.keys(_logBuffers).forEach(k => _logBuffers[k] = []);
   logEl.innerHTML = '<span class="log-info">▶ Logs cleared.</span>';
 }
 
 // ── Socket: crawler_log ───────────────────────────────────────────────────────
 socket.on('crawler_log', (data) => {
   const msg = data.message || '';
+  const key = _accKey(data.account_id);
+  const st  = _getAccState(key);
 
   // Phát hiện phase từ nội dung
   if (msg.includes('Phase 1') || msg.includes('Thu thập danh sách')) {
-    _phase = 'gather'; _totalKnown = false; _updatePhaseLabel();
+    st.phase = 'gather'; st.totalKnown = false;
+    _updateProgressBlockPhase(key, data.account_id);
   } else if (msg.includes('Phase 2') || (msg.includes('Tải ') && msg.includes('song song'))) {
-    if (_phase !== 'process') { _phase = 'process'; _startTs = Date.now(); _updatePhaseLabel(); }
+    if (st.phase !== 'process') { st.phase = 'process'; st.startTs = Date.now(); _updateProgressBlockPhase(key, data.account_id); }
   } else if (msg.includes('Hoàn thành') || (msg.includes('✅') && msg.includes('processed='))) {
-    _phase = 'done'; _updatePhaseLabel();
-    document.getElementById('prog-bar').classList.remove('progress-bar-striped', 'progress-bar-animated');
-    document.getElementById('prog-pct').textContent = '100%';
-    document.getElementById('prog-bar').style.width = '100%';
-    document.getElementById('prog-eta').textContent = '';
+    st.phase = 'done';
+    _updateProgressBlockPhase(key, data.account_id);
+    _setProgressDone(key);
   }
 
   // Trong gather: spinner mode nếu total chưa biết
-  if (_phase === 'gather' && !_totalKnown) {
-    const bar = document.getElementById('prog-bar');
-    bar.classList.add('progress-bar-striped', 'progress-bar-animated');
-    document.getElementById('prog-pct').textContent   = '–';
-    document.getElementById('prog-label').textContent = 'Thu thập danh sách hóa đơn…';
+  if (st.phase === 'gather' && !st.totalKnown) {
+    _setProgressGathering(key, data.account_id);
   }
 
   let level = 'info';
@@ -598,47 +618,137 @@ socket.on('crawler_log', (data) => {
   else if (msg.includes('⚠') || msg.includes('⛔') || msg.includes('🔑')) level = 'warn';
   else if (msg.includes('❌') || msg.includes('✗') || msg.includes('Thất bại')) level = 'error';
   else if (msg.includes('──') || msg.includes('─')) level = 'info';
-  appendLog(msg, level);
+  appendLog(msg, level, data.account_id);
 });
+
+// ── Progress blocks (1 block / account) ───────────────────────────────────────
+function _ensureProgressBlock(key, account_id) {
+  let block = document.getElementById(`prog-block-${key}`);
+  if (block) return block;
+
+  const wrap = document.getElementById('progress-accounts-wrap');
+  block = document.createElement('div');
+  block.id = `prog-block-${key}`;
+  block.className = 'progress-account-block';
+  block.style.cssText = 'padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-0);';
+  block.innerHTML = `
+    <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:4px; display:flex; justify-content:space-between;">
+      <span>${_accountNameById(account_id)}</span>
+      <span class="pb-phase" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--brand);"></span>
+    </div>
+    <div class="d-flex justify-content-between mb-1" style="font-size:11px; color:var(--text-secondary);">
+      <span class="pb-label">Initialising…</span>
+      <span class="pb-pct" style="font-weight:700; color:var(--brand); font-family:var(--font-mono);">–</span>
+    </div>
+    <div class="progress mb-1" style="height:8px; border-radius:6px;">
+      <div class="pb-bar progress-bar progress-bar-striped progress-bar-animated" style="width:0%; transition:width 0.35s ease;"></div>
+    </div>
+    <div class="pb-eta" style="font-size:9px; color:var(--text-muted); text-align:right; min-height:12px; font-family:var(--font-mono);"></div>
+    <div class="row mt-2 text-center" style="font-size:11px;">
+      <div class="col">
+        <div class="pb-total fw-bold" style="font-size:16px; font-family:var(--font-mono); color:var(--brand);">–</div>
+        <div style="color:var(--text-muted); font-size:10px;">Cần tải</div>
+      </div>
+      <div class="col">
+        <div class="pb-done fw-bold" style="font-size:16px; font-family:var(--font-mono); color:var(--success);">0</div>
+        <div style="color:var(--text-muted); font-size:10px;">Thành công</div>
+      </div>
+      <div class="col">
+        <div class="pb-fail fw-bold" style="font-size:16px; font-family:var(--font-mono); color:var(--danger);">0</div>
+        <div style="color:var(--text-muted); font-size:10px;">Lỗi</div>
+      </div>
+      <div class="col">
+        <div class="pb-skip fw-bold" style="font-size:16px; font-family:var(--font-mono); color:var(--text-muted);">0</div>
+        <div style="color:var(--text-muted); font-size:10px;">Bỏ qua</div>
+      </div>
+    </div>`;
+  wrap.appendChild(block);
+  progCard.style.setProperty('display', 'block', 'important');
+  return block;
+}
+
+function _resetProgressBlock(key, account_id) {
+  const st = _getAccState(key);
+  st.phase = 'gather'; st.totalKnown = false; st.startTs = null;
+  const block = _ensureProgressBlock(key, account_id);
+  block.querySelector('.pb-total').textContent = '–';
+  block.querySelector('.pb-done').textContent  = '0';
+  block.querySelector('.pb-fail').textContent  = '0';
+  block.querySelector('.pb-skip').textContent  = '0';
+  const bar = block.querySelector('.pb-bar');
+  bar.style.width = '0%';
+  bar.classList.add('progress-bar-striped', 'progress-bar-animated');
+  block.querySelector('.pb-pct').textContent   = '–';
+  block.querySelector('.pb-label').textContent = 'Thu thập danh sách hóa đơn…';
+  block.querySelector('.pb-eta').textContent   = '';
+  block.querySelector('.pb-phase').textContent = _phaseLabel('gather');
+}
+
+function _updateProgressBlockPhase(key, account_id) {
+  const block = _ensureProgressBlock(key, account_id);
+  const st = _getAccState(key);
+  block.querySelector('.pb-phase').textContent = _phaseLabel(st.phase);
+}
+
+function _setProgressGathering(key, account_id) {
+  const block = _ensureProgressBlock(key, account_id);
+  const bar = block.querySelector('.pb-bar');
+  bar.classList.add('progress-bar-striped', 'progress-bar-animated');
+  block.querySelector('.pb-pct').textContent   = '–';
+  block.querySelector('.pb-label').textContent = 'Thu thập danh sách hóa đơn…';
+}
+
+function _setProgressDone(key) {
+  const block = document.getElementById(`prog-block-${key}`);
+  if (!block) return;
+  block.querySelector('.pb-bar').classList.remove('progress-bar-striped', 'progress-bar-animated');
+  block.querySelector('.pb-pct').textContent = '100%';
+  block.querySelector('.pb-bar').style.width = '100%';
+  block.querySelector('.pb-eta').textContent = '';
+}
 
 // ── Socket: crawler_progress ──────────────────────────────────────────────────
 socket.on('crawler_progress', (data) => {
+  const key = _accKey(data.account_id);
+  const st  = _getAccState(key);
+  const block = _ensureProgressBlock(key, data.account_id);
+
   const total   = data.total   || 0;
   const done    = data.done    || 0;
   const failed  = data.failed  || 0;
   const skipped = data.skipped || 0;
 
-  document.getElementById('stat-done').textContent  = done.toLocaleString('vi-VN');
-  document.getElementById('stat-fail').textContent  = failed.toLocaleString('vi-VN');
-  document.getElementById('stat-skip').textContent  = skipped.toLocaleString('vi-VN');
+  block.querySelector('.pb-done').textContent  = done.toLocaleString('vi-VN');
+  block.querySelector('.pb-fail').textContent  = failed.toLocaleString('vi-VN');
+  block.querySelector('.pb-skip').textContent  = skipped.toLocaleString('vi-VN');
 
   if (total > 0) {
-    _totalKnown = true;
-    if (_phase !== 'process' && _phase !== 'done') {
-      _phase  = 'process';
-      _startTs = Date.now();
-      _updatePhaseLabel();
+    st.totalKnown = true;
+    if (st.phase !== 'process' && st.phase !== 'done') {
+      st.phase = 'process';
+      st.startTs = Date.now();
+      _updateProgressBlockPhase(key, data.account_id);
     }
 
-    document.getElementById('stat-total').textContent = total.toLocaleString('vi-VN');
+    block.querySelector('.pb-total').textContent = total.toLocaleString('vi-VN');
 
     const finished = done + failed;
     const pct      = Math.min(100, Math.round(finished / total * 100));
-    const bar      = document.getElementById('prog-bar');
+    const bar      = block.querySelector('.pb-bar');
     bar.style.width = pct + '%';
     bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-    document.getElementById('prog-pct').textContent = pct + '%';
+    block.querySelector('.pb-pct').textContent = pct + '%';
 
     const remaining = total - finished;
-    document.getElementById('prog-label').textContent =
+    block.querySelector('.pb-label').textContent =
       finished.toLocaleString('vi-VN') + ' / ' + total.toLocaleString('vi-VN') +
       (remaining > 0 ? ` — còn ${remaining.toLocaleString('vi-VN')}` : ' — hoàn thành');
 
     // ETA estimate
-    const etaEl = document.getElementById('prog-eta');
-    if (_startTs && finished > 0 && remaining > 0) {
-      const elapsed = (Date.now() - _startTs) / 1000;  // giây
-      const rate    = finished / elapsed;               // invoice/giây
+    const etaEl = block.querySelector('.pb-eta');
+    if (st.startTs && finished > 0 && remaining > 0) {
+      const elapsed = (Date.now() - st.startTs) / 1000;
+      const rate    = finished / elapsed;
       const eta     = Math.round(remaining / rate);
       const mm      = Math.floor(eta / 60);
       const ss      = eta % 60;
@@ -647,13 +757,12 @@ socket.on('crawler_progress', (data) => {
       etaEl.textContent = '';
     }
   } else {
-    // total = 0 → gather đang chạy, tổng chưa biết
-    document.getElementById('stat-total').textContent = '–';
-    const bar = document.getElementById('prog-bar');
+    block.querySelector('.pb-total').textContent = '–';
+    const bar = block.querySelector('.pb-bar');
     bar.style.width = '0%';
     bar.classList.add('progress-bar-striped', 'progress-bar-animated');
-    document.getElementById('prog-pct').textContent   = '–';
-    document.getElementById('prog-label').textContent = 'Thu thập danh sách hóa đơn…';
+    block.querySelector('.pb-pct').textContent   = '–';
+    block.querySelector('.pb-label').textContent = 'Thu thập danh sách hóa đơn…';
   }
 
   progCard.style.setProperty('display', 'block', 'important');
@@ -725,9 +834,17 @@ function setRunning(running) {
   if (btnStopAuto) btnStopAuto.disabled = !running;
   updateStartBtn();
   if (!running) {
-    _phase = 'done';
-    _updatePhaseLabel();
-    document.getElementById('prog-bar').classList.remove('progress-bar-striped', 'progress-bar-animated');
+    // Đánh dấu 'done' cho mọi block đang chạy (không biết account nào đã stop cụ thể)
+    Object.keys(_accStates).forEach(key => {
+      if (_accStates[key].phase !== 'idle') {
+        _accStates[key].phase = 'done';
+        const block = document.getElementById(`prog-block-${key}`);
+        if (block) {
+          block.querySelector('.pb-phase').textContent = _phaseLabel('done');
+          block.querySelector('.pb-bar').classList.remove('progress-bar-striped', 'progress-bar-animated');
+        }
+      }
+    });
   }
   const dot = document.getElementById('status-dot');
   const txt = document.getElementById('status-text');
@@ -765,7 +882,7 @@ async function syncNow() {
     const res  = await fetch('/crawler/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (data.ok) {
-      _resetProgress();
+      accountIds.forEach(aid => _resetProgressBlock(_accKey(aid), aid));
       appendLog(`✓ Đã xếp hàng ${data.total_chunks || 1} chunk.`, 'success');
       setRunning(true);
     } else { appendLog(`❌ ${data.error}`, 'error'); }
@@ -810,7 +927,7 @@ async function startCrawl() {
       if (data.scheduled_only) {
         appendLog(`🕐 ${data.message || 'Auto-sync đã được lên lịch.'}`, 'success');
       } else {
-        _resetProgress();
+        accountIds.forEach(aid => _resetProgressBlock(_accKey(aid), aid));
         const n = data.total_chunks || data.chunks?.length || 1;
         appendLog(`✓ Đã xếp hàng ${n} chunk. Đang chạy…`, 'success');
         setRunning(true);
@@ -841,23 +958,23 @@ async function cancelAutoSync() {
 socket.on('auto_sync_state', (data) => {
   setAutoSync(data.active, data.config || null);
   const accLabel = data.account_id != null ? ` — ${_accountNameById(data.account_id)}` : '';
-  if (data.active)                          appendLog(`▶ Auto-sync đang chạy${accLabel}.`, 'info');
-  else if (data.config && data.config.enabled) appendLog(`📅 Auto-sync đã lên lịch${accLabel}.`, 'info');
-  else                                      appendLog(`🔕 Auto-sync đã tắt${accLabel}.`, 'warn');
+  if (data.active)                          appendLog(`▶ Auto-sync đang chạy${accLabel}.`, 'info', data.account_id);
+  else if (data.config && data.config.enabled) appendLog(`📅 Auto-sync đã lên lịch${accLabel}.`, 'info', data.account_id);
+  else                                      appendLog(`🔕 Auto-sync đã tắt${accLabel}.`, 'warn', data.account_id);
 });
 
 socket.on('crawler_done', (data) => {
-  appendLog('✅ Crawl completed.', 'success');
-  setRunning(false);
-  _phase = 'done';
-  _updatePhaseLabel();
-  document.getElementById('prog-bar').style.width = '100%';
-  document.getElementById('prog-bar').classList.remove('progress-bar-striped', 'progress-bar-animated');
-  document.getElementById('prog-pct').textContent = '100%';
-  document.getElementById('prog-eta').textContent = '';
+  const key = _accKey(data && data.account_id);
+  appendLog('✅ Crawl completed.', 'success', data && data.account_id);
+  _setProgressDone(key);
+  const st = _getAccState(key);
+  st.phase = 'done';
+  _updateProgressBlockPhase(key, data && data.account_id);
+
+  // Nếu không còn account nào đang chạy → cập nhật nút Start/Stop chung
+  // (trạng thái is_running tổng sẽ được polling /api/status cập nhật chính xác)
 });
 
-// ── Polling ───────────────────────────────────────────────────────────────────
 // ── Polling ───────────────────────────────────────────────────────────────────
 setInterval(async () => {
   try {
@@ -867,30 +984,34 @@ setInterval(async () => {
     setAutoSync(!!data.auto_sync_active, data.auto_sync_config || null);
 
     if (data.running_job) {
-      const j = data.running_job;
-      if (j.total_invoices > 0 && !_totalKnown) {
-        _totalKnown = true;
-        _phase = 'process';
-        _startTs = Date.now();
-        _updatePhaseLabel();
+      const j   = data.running_job;
+      const aid = j.account_id;
+      const key = _accKey(aid);
+      const st  = _getAccState(key);
+      if (j.total_invoices > 0 && !st.totalKnown) {
+        st.totalKnown = true;
+        st.phase = 'process';
+        st.startTs = Date.now();
+        _updateProgressBlockPhase(key, aid);
 
+        const block = _ensureProgressBlock(key, aid);
         const total    = j.total_invoices;
         const done     = j.downloaded_invoices || 0;
         const failed   = j.failed_invoices || 0;
         const finished = done + failed;
         const pct      = Math.min(100, Math.round(finished / total * 100));
 
-        document.getElementById('stat-total').textContent = total.toLocaleString('vi-VN');
-        document.getElementById('stat-done').textContent  = done.toLocaleString('vi-VN');
-        document.getElementById('stat-fail').textContent  = failed.toLocaleString('vi-VN');
+        block.querySelector('.pb-total').textContent = total.toLocaleString('vi-VN');
+        block.querySelector('.pb-done').textContent  = done.toLocaleString('vi-VN');
+        block.querySelector('.pb-fail').textContent  = failed.toLocaleString('vi-VN');
 
-        const bar = document.getElementById('prog-bar');
+        const bar = block.querySelector('.pb-bar');
         bar.style.width = pct + '%';
         bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-        document.getElementById('prog-pct').textContent = pct + '%';
+        block.querySelector('.pb-pct').textContent = pct + '%';
 
         const remaining = total - finished;
-        document.getElementById('prog-label').textContent =
+        block.querySelector('.pb-label').textContent =
           finished.toLocaleString('vi-VN') + ' / ' + total.toLocaleString('vi-VN') +
           (remaining > 0 ? ` — còn ${remaining.toLocaleString('vi-VN')}` : ' — hoàn thành');
 
@@ -942,4 +1063,17 @@ setAutoSync(isAutoSync, autoSyncCfg && Object.keys(autoSyncCfg).length ? autoSyn
   buildAccountScheduleInputs();
 })();
 </script>
+
+<style>
+.log-tab-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.log-tab-btn.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+</style>
 {% endblock %}

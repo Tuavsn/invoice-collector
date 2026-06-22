@@ -15,4 +15,5 @@ if __name__ == "__main__":
         debug=Config.DEBUG,
         use_reloader=False,  # Disabled — reloader breaks the background asyncio loop
         log_output=True,
+        allow_unsafe_werkzeug=True,
     )

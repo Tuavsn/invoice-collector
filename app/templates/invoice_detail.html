@@ -170,10 +170,6 @@
           </tr>
           {% endmacro %}
           {# ── mat_hang: dùng mat_hang_display (ưu tiên line items, giống list) ── #}
-          <tr>
-            <td style="color:var(--text-muted); width:160px; font-size:12px;">Mặt hàng</td>
-            <td title="{{ mat_hang_display }}">{{ mat_hang_display or '—' }}</td>
-          </tr>
           {{ erow('Tháng kê khai',      invoice.thang_ke_khai) }}
           {{ erow('Ghi chú / Loại',     invoice.ghi_chu) }}
           {{ erow('Mã công trình',       invoice.ma_cong_trinh) }}

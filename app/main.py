@@ -28,16 +28,17 @@ def create_app() -> Flask:
         enqueue=True
     )
 
-    logger.add(
-        sys.stdout,
-        level="INFO",
-        enqueue=True,
-        format=(
-            "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
-            "{level:<8} | "
-            "{message}"
-        ),
-    )
+    if sys.stdout is not None:
+        logger.add(
+            sys.stdout,
+            level="INFO",
+            enqueue=True,
+            format=(
+                "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
+                "{level:<8} | "
+                "{message}"
+            ),
+        )
 
     setup_logging()
 

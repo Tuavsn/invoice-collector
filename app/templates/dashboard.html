@@ -126,10 +126,12 @@
   {% set c_pe5 = acc.categories.get('purchase_einvoice_5', {}).get('count', 0) %}
   {% set c_pp5 = acc.categories.get('purchase_pos_5', {}).get('count', 0) %}
   {% set c_pe6 = acc.categories.get('purchase_einvoice_6', {}).get('count', 0) %}
+  {% set c_pp6 = acc.categories.get('purchase_pos_6', {}).get('count', 0) %}
   {% set c_pe8 = acc.categories.get('purchase_einvoice_8', {}).get('count', 0) %}
+  {% set c_pp8 = acc.categories.get('purchase_pos_8', {}).get('count', 0) %}
 
   {% set c_pe = c_pe5 + c_pe6 + c_pe8 %}
-  {% set c_pp = c_pp5 %}
+  {% set c_pp = c_pp5 + c_pp6 + c_pp8 %}
   <div class="col-md-6 col-lg-4">
     <div class="card h-100">
       <div class="card-header d-flex align-items-center justify-content-between">

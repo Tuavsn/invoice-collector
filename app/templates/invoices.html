@@ -43,8 +43,10 @@
                   ('sale_pos', 'Bán ra - HĐ máy tính tiền'),
                   ('purchase_einvoice_5', 'Mua vào - Đã cấp HĐ - điện tử'),
                   ('purchase_pos_5', 'Mua vào - Đã cấp HĐ - máy tính tiền'),
-                  ('purchase_einvoice_6', 'Mua vào - Cục thuế không nhận mã'),
-                  ('purchase_einvoice_8', 'Mua vào - Cục thuế đã nhận có mã')
+                  ('purchase_einvoice_6', 'Mua vào - Cục thuế không nhận mã - điện tử'),
+                  ('purchase_pos_6', 'Mua vào - Cục thuế không nhận mã - máy tính tiền'),
+                  ('purchase_einvoice_8', 'Mua vào - Cục thuế đã nhận có mã - điện tử'),
+                  ('purchase_pos_8', 'Mua vào - Cục thuế đã nhận có mã - máy tính tiền')
               ] %}
               <label class="dropdown-item d-flex align-items-center gap-2 py-1 px-2" style="cursor:pointer; border-radius:4px;">
                 <input type="checkbox" name="invoice_category" value="{{ val }}" class="cat-chk"
@@ -105,7 +107,7 @@
         <span style="font-size:11px; color:var(--text-muted); align-self:center;">Đang lọc:</span>
         {% if search %}<span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">🔍 {{ search }}</span>{% endif %}
         {% if invoice_category_list %}
-          {% set _cat_labels = {'sale_einvoice': 'Bán ra - HĐ điện tử', 'sale_pos': 'Bán ra - HĐ máy tính tiền', 'purchase_einvoice_5': 'Mua vào - Đã cấp HĐ - điện tử', 'purchase_pos_5': 'Mua vào - Đã cấp HĐ - máy tính tiền', 'purchase_einvoice_6': 'Mua vào - Cục thuế không nhận mã', 'purchase_einvoice_8': 'Mua vào - Cục thuế đã nhận có mã'} %}
+          {% set _cat_labels = {'sale_einvoice': 'Bán ra - HĐ điện tử', 'sale_pos': 'Bán ra - HĐ máy tính tiền', 'purchase_einvoice_5': 'Mua vào - Đã cấp HĐ - điện tử', 'purchase_pos_5': 'Mua vào - Đã cấp HĐ - máy tính tiền', 'purchase_einvoice_6': 'Mua vào - Cục thuế không nhận mã - điện tử', 'purchase_einvoice_8': 'Mua vào - Cục thuế đã nhận có mã - điện tử', 'purchase_pos_6': 'Mua vào - Cục thuế không nhận mã - máy tính tiền', 'purchase_pos_8': 'Mua vào - Cục thuế đã nhận có mã - máy tính tiền'} %}
           {% for _cv in invoice_category_list %}
           <span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">📋 {{ _cat_labels.get(_cv, _cv) }}</span>
           {% endfor %}

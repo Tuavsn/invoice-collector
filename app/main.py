@@ -99,10 +99,12 @@ class InterceptHandler(logging.Handler):
 
 
 def setup_logging() -> None:
+    werkzeug_log = logging.getLogger("werkzeug")
+    werkzeug_log.disabled = True
+    
     intercept_handler = InterceptHandler()
 
     for name in (
-        "werkzeug",
         "flask.app",
         "engineio",
         "socketio",

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+from operator import inv
 import shutil
 import zipfile
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
@@ -20,6 +21,7 @@ from app.services.xml_service import XmlService
 from app.utils.paths import ensure_invoice_dir
 
 GDT_BASE   = "https://hoadondientu.gdt.gov.vn"
+VN_TZ = timezone(timedelta(hours=7))
 _PAGE_SIZE = 50
 _RETRY     = 2
 _DELAY     = 0.5
@@ -208,9 +210,15 @@ def _raw_item_key(raw: Dict[str, Any]) -> tuple:
             raw.get("nbmst"), raw.get("nmmst"), raw.get("ttxly"))
 
 
-def _dedup_key(inv: Dict[str, Any], category: str) -> tuple:
-    return (inv["invoice_no"], inv["invoice_symbol"] or "", inv["invoice_form"] or "",
-            category, inv["total_amount"])
+def _dedup_key(inv: Dict[str, Any], category: str, account_id: Optional[int] = None) -> tuple:
+    return (
+        inv["invoice_no"],
+        inv["invoice_symbol"] or "",
+        inv["invoice_form"] or "",
+        inv["total_amount"] or 0,
+        category,
+        account_id,
+    )
 
 
 def _normalize_xml_line_item(item: Dict[str, Any]) -> Dict[str, Any]:
@@ -995,7 +1003,12 @@ class ApiCrawlerEngine:
 
                     inv["_api_path_prefix"] = path_prefix
 
-                    key = _dedup_key(inv, cat)
+                    key = _dedup_key(inv, cat, self.account_id)
+                    
+                    if key in seen:
+                        logger.debug("Hóa đơn tồn tại trong dedup_key: {}", inv)
+                        logger.debug("Key: {}", key)
+                    
                     if key not in seen:
                         seen.add(key)
 
@@ -1004,6 +1017,7 @@ class ApiCrawlerEngine:
                         month_counts[mk] = month_counts.get(mk, 0) + 1
 
                         if self._is_already_crawled(inv, cat):
+                            logger.debug("Hóa đơn đã tồn tại trong DB: {}", inv)
                             self._total_skipped += 1
                         else:
                             new_items.append((inv, cat))
@@ -1283,6 +1297,7 @@ class ApiCrawlerEngine:
                     invoice_no=inv["invoice_no"],
                     invoice_symbol=inv["invoice_symbol"] or None,
                     invoice_form=inv["invoice_form"]     or None,
+                    total_amount=inv["total_amount"],
                     invoice_category=category,
                     account_id=self.account_id,
                 )
@@ -1384,10 +1399,15 @@ def _parse_gdt_date(raw: Any) -> Optional[date]:
     if isinstance(raw, date) and not isinstance(raw, datetime):
         return raw
     if isinstance(raw, datetime):
+        if raw.tzinfo:
+            return raw.astimezone(VN_TZ).date()
         return raw.date()
     raw = str(raw).strip()
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo:
+            dt = dt.astimezone(VN_TZ)
+        return dt.date()
     except Exception:
         pass
     for fmt in ("%d/%m/%Y", "%d-%m-%Y"):
@@ -1402,10 +1422,11 @@ def _parse_gdt_datetime(raw: Any) -> Optional[datetime]:
     if not raw:
         return None
     if isinstance(raw, datetime):
-        return raw
+        return raw.astimezone(VN_TZ) if raw.tzinfo else raw
     raw = str(raw).strip()
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt.astimezone(VN_TZ) if dt.tzinfo else dt
     except Exception:
         pass
     for fmt in (

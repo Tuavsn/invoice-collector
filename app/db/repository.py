@@ -53,6 +53,7 @@ class InvoiceRepository:
                 invoice_symbol=data.get("invoice_symbol"),
                 invoice_form=data.get("invoice_form"),
                 invoice_category=data.get("invoice_category"),
+                total_amount=data.get("total_amount"),
                 account_id=data.get("account_id"),
             )
             .first()
@@ -87,6 +88,7 @@ class InvoiceRepository:
         invoice_symbol: Optional[str] = None,
         invoice_form: Optional[str] = None,
         invoice_category: Optional[str] = None,
+        total_amount: Optional[float] = None,
         account_id: Optional[int] = None,
     ) -> Optional[Invoice]:
         """
@@ -100,6 +102,8 @@ class InvoiceRepository:
             query = query.filter_by(invoice_form=invoice_form)
         if invoice_category is not None:
             query = query.filter_by(invoice_category=invoice_category)
+        if total_amount is not None:
+            query = query.filter_by(total_amount=total_amount)
         if account_id is not None:
             query = query.filter_by(account_id=account_id)
         return query.first()

@@ -2,1078 +2,672 @@
 {% block title %}Crawler — GDT Invoice Crawler{% endblock %}
 {% block page_title %}Crawler Control{% endblock %}
 
+{% set active_accounts = accounts | selectattr('is_active') | list %}
+
 {% block content %}
 <div class="row g-3">
 
-  <!-- ── Control Panel ─────────────────────── -->
-  <div class="col-md-5">
-    <div class="card">
-      <div class="card-header">
-        <i class="bi bi-robot"></i> Start New Crawl
-        <span id="auto-sync-badge" style="display:{{ 'inline-flex' if auto_sync_active else 'none' }}; align-items:center; gap:5px; margin-left:10px; background:var(--brand); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:0.05em;">
-          <span style="width:6px;height:6px;border-radius:50%;background:#fff;animation:pulse 1.2s infinite;"></span>
-          AUTO SYNC
-        </span>
-      </div>
-      <div class="card-body p-4">
-
-        <!-- Account Selector -->
-        {% if accounts %}
-        <div class="mb-3">
-          <label class="form-label" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-secondary);">
-            <i class="bi bi-person-badge"></i> Tài khoản crawl
-          </label>
-          <div id="account-list" style="display:flex; flex-direction:column; gap:6px;">
-            {% for acct in accounts %}
-            {% if acct.is_active %}
-            <label class="d-flex align-items-center gap-2 p-2"
-                   style="border:1px solid var(--border); border-radius:var(--radius-md); cursor:pointer; background:var(--surface-0); font-size:13px; transition:background .15s;"
-                   onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='var(--surface-0)'">
-              <input type="checkbox" class="acct-chk" value="{{ acct.id }}" checked
-                     style="width:15px; height:15px; cursor:pointer;" onchange="updateStartBtn(); buildAccountScheduleInputs();">
-              <span class="fw-600">{{ acct.name }}</span>
-              <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); margin-left:auto;">{{ acct.username }}</span>
-            </label>
-            {% endif %}
-            {% endfor %}
-          </div>
-          {% if accounts | selectattr('is_active') | list | length > 1 %}
-          <div class="mt-1" style="font-size:11px; color:var(--text-muted);">
-            <a href="#" onclick="toggleAllAccounts(true); return false;">Chọn tất cả</a> ·
-            <a href="#" onclick="toggleAllAccounts(false); return false;">Bỏ chọn</a>
-          </div>
-          {% endif %}
-        </div>
-        {% else %}
-        <div class="mb-3 p-3" style="background:var(--warning-bg); border:1px solid var(--warning-border); border-radius:var(--radius-md); font-size:12px; color:var(--warning);">
-          <i class="bi bi-exclamation-triangle me-1"></i>
-          Chưa có tài khoản nào. <a href="/settings/">Thêm tài khoản GDT</a> để bắt đầu crawl.
-        </div>
-        {% endif %}
-
-        <!-- Mode Tabs -->
-        <div class="mb-4">
-          <div class="d-flex gap-2">
-            <button id="tab-range" class="btn btn-sm btn-brand flex-grow-1 tab-btn active" onclick="switchMode('range')">
-              <i class="bi bi-calendar-range"></i> Date Range
-            </button>
-            <button id="tab-autosync" class="btn btn-sm btn-outline-secondary flex-grow-1 tab-btn" onclick="switchMode('auto_sync')">
-              <i class="bi bi-arrow-repeat"></i> Auto Sync
-            </button>
-          </div>
-        </div>
-
-        <!-- Range Mode -->
-        <div id="panel-range">
-          <div class="row g-2 mb-2">
-            <div class="col-6">
-              <label class="form-label">Từ ngày</label>
-              <input type="text" id="inp-start-date" class="form-control" oninput="previewChunks()" />
-            </div>
-            <div class="col-6">
-              <label class="form-label">Đến ngày</label>
-              <input type="text" id="inp-end-date" class="form-control" oninput="previewChunks()" />
-            </div>
-          </div>
-
-          <!-- Chunk Preview -->
-          <div id="chunk-preview" class="mb-3" style="display:none;">
-            <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.06em;">
-              <i class="bi bi-grid-3x3-gap"></i> Sẽ chạy thành <strong id="chunk-count" style="color:var(--brand);">—</strong> chunk:
-            </div>
-            <div id="chunk-list" style="font-size:11px; font-family:var(--font-mono); color:var(--text-secondary); max-height:80px; overflow-y:auto; background:var(--surface-2); border-radius:var(--radius-sm); padding:8px 10px; border:1px solid var(--border);"></div>
-          </div>
-        </div>
-
-        <!-- Auto Sync Mode -->
-        <div id="panel-autosync" style="display:none;">
-          <div class="mb-3">
-            <label class="form-label">Chọn khoảng thời gian</label>
-            <div class="d-flex gap-2 flex-wrap mb-2">
-              <button class="btn btn-sm btn-outline-secondary autosync-preset active" data-preset="2m" onclick="selectPreset(this,'2m')">2 tháng</button>
-              <button class="btn btn-sm btn-outline-secondary autosync-preset" data-preset="6m" onclick="selectPreset(this,'6m')">6 tháng</button>
-              <button class="btn btn-sm btn-outline-secondary autosync-preset" data-preset="1y" onclick="selectPreset(this,'1y')">1 năm</button>
-              <button class="btn btn-sm btn-outline-secondary autosync-preset" data-preset="custom_date" onclick="selectPreset(this,'custom_date')">Tùy chỉnh</button>
-            </div>
-          </div>
-
-          <div id="autosync-custom-dates" style="display:none;" class="mb-3">
-            <div class="row g-2">
-              <div class="col-6">
-                <label class="form-label" style="font-size:12px;">Từ ngày</label>
-                <input type="text" id="autosync-start-date" class="form-control form-control-sm" oninput="previewAutoSyncChunks()" />
-              </div>
-              <div class="col-6">
-                <label class="form-label" style="font-size:12px;">Đến ngày</label>
-                <input type="text" id="autosync-end-date" class="form-control form-control-sm" oninput="previewAutoSyncChunks()" />
-              </div>
-            </div>
-          </div>
-
-          <div class="p-3 mb-3" style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); font-size:12px;">
-            <div id="autosync-range" style="font-family:var(--font-mono); color:var(--brand); margin-bottom:6px;"></div>
-            <div id="autosync-chunk-preview" style="color:var(--text-muted);"></div>
-          </div>
-
-          <div class="mb-3" id="account-schedules-wrap">
-            <label class="form-label" style="font-size:12px;">🕖 Giờ chạy hàng ngày (theo tài khoản)</label>
-            <div id="account-schedule-list" style="display:flex; flex-direction:column; gap:6px;"></div>
-          </div>
-
-          <div id="autosync-status-card" style="display:none; margin-bottom:12px; padding:12px 14px; border-radius:var(--radius-md); border:1px solid var(--success-border); background:var(--success-bg); font-size:12px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-              <span style="width:8px;height:8px;border-radius:50%;background:var(--success);animation:pulse 1.2s infinite;flex-shrink:0;"></span>
-              <strong style="color:var(--success); font-size:13px;">Auto-Sync đang hoạt động</strong>
-            </div>
-            <div style="color:var(--text-secondary); line-height:1.8;">
-              <div>📦 Chế độ: <strong id="asc-preset" style="color:var(--brand);font-family:var(--font-mono);">—</strong></div>
-              <div id="asc-schedules" style="margin:4px 0;"></div>
-              <div>🕐 Kích hoạt lúc: <strong id="asc-activated-at" style="font-family:var(--font-mono);">—</strong></div>
-            </div>
-            <button class="btn btn-sm btn-outline-danger mt-2" onclick="cancelAutoSync()" style="font-size:11px;">
-              <i class="bi bi-x-circle"></i> Hủy Auto-Sync
-            </button>
-          </div>
-        </div>
-
-        <!-- Buttons Range -->
-        <div id="btn-group-range" class="d-flex gap-2 mt-2">
-          <button id="btn-start" class="btn btn-brand flex-grow-1" onclick="startCrawl()" disabled>
-            <i class="bi bi-play-fill"></i> Start Crawl
-          </button>
-          <button id="btn-stop" class="btn btn-outline-danger" onclick="stopCrawl()" disabled>
-            <i class="bi bi-stop-fill"></i> Stop
-          </button>
-        </div>
-
-        <!-- Buttons Auto Sync -->
-        <div id="btn-group-autosync" class="gap-2 mt-2" style="display:none;">
-          <button id="btn-sync-now" class="btn btn-outline-brand flex-grow-1" onclick="syncNow()" disabled>
-            <i class="bi bi-lightning-fill"></i> Sync Ngay
-          </button>
-          <button id="btn-enable-autosync" class="btn btn-brand flex-grow-1" onclick="startCrawl()" disabled>
-            <i class="bi bi-arrow-repeat"></i> Kích hoạt Auto Sync
-          </button>
-          <button id="btn-stop-auto" class="btn btn-outline-danger" onclick="stopCrawl()" disabled>
-            <i class="bi bi-stop-fill"></i> Stop
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Progress Card — danh sách progress riêng theo từng account -->
-    <div class="card mt-3" id="progress-card" style="display:none !important;">
-      <div class="card-header"><i class="bi bi-activity"></i> Progress</div>
-      <div class="card-body p-3" id="progress-accounts-wrap" style="display:flex; flex-direction:column; gap:10px;">
-        <!-- Mỗi account-progress-block được tạo dynamic bởi JS (xem _ensureProgressBlock) -->
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Log Terminal ───────────────────────── -->
-  <div class="col-md-7">
-    <div id="captcha-container" style="margin-bottom:8px;"></div>
-    <div class="card h-100">
-      <div class="card-header" style="flex-wrap:wrap; gap:6px;">
-        <i class="bi bi-terminal"></i> Live Logs
-        <div id="log-tabs" style="display:flex; gap:4px; flex-wrap:wrap; margin-left:10px;">
-          <button class="btn btn-sm log-tab-btn active" data-tab="all" onclick="switchLogTab('all')" style="font-size:11px; padding:2px 10px;">Tất cả</button>
-          <!-- Tab theo account được thêm dynamic -->
-        </div>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="clearLogs()">
-          <i class="bi bi-trash3"></i> Clear
-        </button>
-      </div>
-      <div class="card-body p-3">
-        <div id="log-terminal" class="log-terminal" style="max-height:460px;">
-<span class="log-info">▶ Waiting for crawl to start…</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Recent Jobs ────────────────────────── -->
+  {% if not active_accounts %}
   <div class="col-12">
-    <div class="card">
-      <div class="card-header"><i class="bi bi-clock-history"></i> Recent Jobs</div>
-      <div class="card-body p-0">
-        <table class="table mb-0">
-          <thead>
-            <tr>
-              <th>ID</th><th>Tài khoản</th><th>Date Range</th><th>Status</th>
-              <th>Downloaded</th><th>Failed</th><th>Started</th>
-            </tr>
-          </thead>
-          <tbody id="jobs-tbody">
-            {% for job in recent_jobs %}
-            <tr>
-              <td><code>#{{ job.id }}</code></td>
-              <td style="font-size:12px;">
-                {% if job.account_name %}
-                  <span class="badge" style="background:var(--brand-dim);color:var(--brand);border:1px solid var(--brand-border);">{{ job.account_name }}</span>
-                {% else %}—{% endif %}
-              </td>
-              <td>{{ job.start_date }} → {{ job.end_date }}</td>
-              <td><span class="badge badge-status badge-status-{{ job.status }}">{{ job.status | upper }}</span></td>
-              <td>{{ job.downloaded_invoices }}</td>
-              <td>{{ job.failed_invoices }}</td>
-              <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);">
-                {{ job.start_time.strftime('%d/%m/%Y %H:%M') if job.start_time else '—' }}
-              </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="7" class="text-center py-4" style="color:var(--text-muted);">No jobs yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    <div class="p-3" style="background:var(--warning-bg); border:1px solid var(--warning-border); border-radius:var(--radius-md); font-size:13px; color:var(--warning);">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      Chưa có tài khoản nào. <a href="/settings/">Thêm tài khoản GDT</a> để bắt đầu crawl.
+    </div>
+  </div>
+  {% endif %}
+
+  {% for acct in active_accounts %}
+  <div class="col-12">
+    <div class="card account-card" id="acct-card-{{ acct.id }}" data-account-id="{{ acct.id }}">
+      <div class="card-header d-flex align-items-center justify-content-between" style="flex-wrap:wrap; gap:8px;">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-person-badge"></i>
+          <strong>{{ acct.name }}</strong>
+          <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted);">{{ acct.username }}</span>
+        </div>
+        <span id="badge-{{ acct.id }}" class="badge" style="background:var(--surface-2); color:var(--text-secondary); border:1px solid var(--border); font-size:11px;">Idle</span>
+      </div>
+
+      <div class="card-body p-3">
+
+        <div id="captcha-slot-{{ acct.id }}"></div>
+
+        <!-- Stats -->
+        <div class="row text-center mb-3 g-2">
+          <div class="col">
+            <div class="p-2" style="border:1px solid var(--border); border-radius:var(--radius-md);">
+              <div id="stat-grand-{{ acct.id }}" style="font-size:18px; font-weight:700; font-family:var(--font-mono); color:var(--text-secondary);">–</div>
+              <div style="font-size:10px; color:var(--text-muted);">Tổng</div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="p-2" style="border:1px solid var(--border); border-radius:var(--radius-md);">
+              <div id="stat-total-{{ acct.id }}" style="font-size:18px; font-weight:700; font-family:var(--font-mono); color:var(--brand);">–</div>
+              <div style="font-size:10px; color:var(--text-muted);">Cần tải</div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="p-2" style="border:1px solid var(--border); border-radius:var(--radius-md);">
+              <div id="stat-done-{{ acct.id }}" style="font-size:18px; font-weight:700; font-family:var(--font-mono); color:var(--success);">0</div>
+              <div style="font-size:10px; color:var(--text-muted);">Thành công</div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="p-2" style="border:1px solid var(--border); border-radius:var(--radius-md);">
+              <div id="stat-fail-{{ acct.id }}" style="font-size:18px; font-weight:700; font-family:var(--font-mono); color:var(--danger);">0</div>
+              <div style="font-size:10px; color:var(--text-muted);">Lỗi</div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="p-2" style="border:1px solid var(--border); border-radius:var(--radius-md);">
+              <div id="stat-skip-{{ acct.id }}" style="font-size:18px; font-weight:700; font-family:var(--font-mono); color:var(--text-muted);">0</div>
+              <div style="font-size:10px; color:var(--text-muted);">Bỏ qua</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <!-- Manual range crawl -->
+          <div class="col-md-6">
+            <div class="p-3 h-100" style="border:1px solid var(--border); border-radius:var(--radius-md);">
+              <div class="mb-2" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-secondary);">
+                <i class="bi bi-calendar-range"></i> Crawl theo khoảng ngày
+              </div>
+              <div class="row g-2 mb-2">
+                <div class="col-6">
+                  <label class="form-label" style="font-size:11px;">Từ ngày</label>
+                  <input type="text" id="range-start-{{ acct.id }}" class="form-control form-control-sm" />
+                </div>
+                <div class="col-6">
+                  <label class="form-label" style="font-size:11px;">Đến ngày</label>
+                  <input type="text" id="range-end-{{ acct.id }}" class="form-control form-control-sm" />
+                </div>
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-brand flex-grow-1" id="btn-start-range-{{ acct.id }}" onclick="startRangeCrawl({{ acct.id }})">
+                  <i class="bi bi-play-fill"></i> Crawl
+                </button>
+                <button class="btn btn-sm btn-outline-danger" id="btn-stop-{{ acct.id }}" onclick="stopAccount({{ acct.id }})" disabled>
+                  <i class="bi bi-stop-fill"></i> Stop
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Auto sync -->
+          <div class="col-md-6">
+            <div class="p-3 h-100" style="border:1px solid var(--border); border-radius:var(--radius-md);">
+              <div class="mb-2" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-secondary);">
+                <i class="bi bi-arrow-repeat"></i> Auto Sync hàng ngày
+              </div>
+              <div class="d-flex gap-2 flex-wrap mb-2">
+                <button class="btn btn-sm btn-brand active as-preset" data-preset="2m" onclick="selectAcctPreset({{ acct.id }}, this, '2m')">2 tháng</button>
+                <button class="btn btn-sm btn-outline-secondary as-preset" data-preset="6m" onclick="selectAcctPreset({{ acct.id }}, this, '6m')">6 tháng</button>
+                <button class="btn btn-sm btn-outline-secondary as-preset" data-preset="1y" onclick="selectAcctPreset({{ acct.id }}, this, '1y')">1 năm</button>
+                <button class="btn btn-sm btn-outline-secondary as-preset" data-preset="custom_date" onclick="selectAcctPreset({{ acct.id }}, this, 'custom_date')">Tùy chỉnh</button>
+              </div>
+              <div id="as-custom-{{ acct.id }}" class="row g-2 mb-2" style="display:none;">
+                <div class="col-6">
+                  <input type="text" id="as-start-{{ acct.id }}" class="form-control form-control-sm" placeholder="Từ ngày" />
+                </div>
+                <div class="col-6">
+                  <input type="text" id="as-end-{{ acct.id }}" class="form-control form-control-sm" placeholder="Đến ngày" />
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <label style="font-size:11px; white-space:nowrap;">🕖 Giờ chạy:</label>
+                <input type="time" id="as-time-{{ acct.id }}" class="form-control form-control-sm" value="19:00" style="width:120px; font-family:var(--font-mono);" />
+                <span style="font-size:10px; color:var(--text-muted);">ICT</span>
+              </div>
+              <div id="as-status-{{ acct.id }}" style="font-size:11px; color:var(--text-muted); margin-bottom:8px; min-height:14px;"></div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-brand flex-grow-1" id="btn-sync-now-{{ acct.id }}" onclick="syncNowAccount({{ acct.id }})">
+                  <i class="bi bi-lightning-fill"></i> Sync Ngay
+                </button>
+                <button class="btn btn-sm btn-brand flex-grow-1" id="btn-enable-as-{{ acct.id }}" onclick="enableAutoSyncAccount({{ acct.id }})">
+                  <i class="bi bi-arrow-repeat"></i> Kích hoạt
+                </button>
+              </div>
+              <button class="btn btn-sm btn-outline-danger w-100 mt-2" id="btn-disable-as-{{ acct.id }}" onclick="disableAutoSyncAccount({{ acct.id }})" style="display:none;">
+                <i class="bi bi-x-circle"></i> Hủy Auto-Sync
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Log -->
+        <div class="mt-3">
+          <div class="d-flex align-items-center mb-1" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-secondary);">
+            <i class="bi bi-terminal me-1"></i> Live Log
+            <button class="btn btn-sm btn-outline-secondary ms-2" style="font-size:10px; padding:1px 8px;" onclick="clearAcctLog({{ acct.id }})">Clear</button>
+          </div>
+          <div id="log-{{ acct.id }}" style="height:320px; overflow-y:auto; background:var(--surface-1,#0d1117); color:#c9d1d9; font-family:var(--font-mono); font-size:11px; padding:8px 10px; border-radius:var(--radius-md); border:1px solid var(--border);"><span data-placeholder="1" style="color:#6e7681;">▶ Waiting…</span></div>
+        </div>
+
       </div>
     </div>
   </div>
+  {% endfor %}
 
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-let isRunning     = {{ 'true' if status.is_running else 'false' }};
-let isAutoSync    = {{ 'true' if auto_sync_active else 'false' }};
-const autoSyncCfg = {{ auto_sync_config | tojson if auto_sync_config else '{}' }};
-let currentMode   = 'range';
-let currentPreset = '2m';
+// ── Server-injected initial state ─────────────────────────────────────────────
+const ACCOUNTS = [
+  {% for acct in active_accounts %}
+  { id: {{ acct.id }}, name: {{ acct.name | tojson }} },
+  {% endfor %}
+];
+const initialStatus       = {{ status | tojson }};
+const initialAutoSyncCfg  = {{ (auto_sync_config or {}) | tojson }};
 
-const logEl    = document.getElementById('log-terminal');
-const btnStart = document.getElementById('btn-start');
-const btnStop  = document.getElementById('btn-stop');
-const progCard = document.getElementById('progress-card');
+function $(id) { return document.getElementById(id); }
+function toIso(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
-// ── Per-account phase & progress state ──────────────────────────────────────
-// key: account_id (number) hoặc '_legacy' cho account_id == null
-const _accStates = {};   // { [key]: { phase, totalKnown, startTs } }
-let   _activeLogTab = 'all';
-const _logTabsSeen  = new Set();   // các key đã có tab log
-const _logBuffers   = {};          // { [key]: [{html, level}], all: [...] }
-_logBuffers['all'] = [];
-
-function _accKey(account_id) {
-  return account_id === null || account_id === undefined ? '_legacy' : String(account_id);
-}
-
-function _getAccState(key) {
-  if (!_accStates[key]) {
-    _accStates[key] = { phase: 'idle', totalKnown: false, startTs: null };
-  }
-  return _accStates[key];
-}
-
-function _phaseLabel(phase) {
-  const labels = {
-    idle:    '',
-    gather:  '📡 Phase 1 — Thu thập danh sách hóa đơn…',
-    process: '⚡ Phase 2 — Tải & xử lý song song…',
-    done:    '✅ Hoàn thành',
+// ── Per-account state ──────────────────────────────────────────────────────────
+const accState = {};
+ACCOUNTS.forEach(a => {
+  accState[a.id] = {
+    phase: 'idle',
+    totalKnown: false,
+    startTs: null,
+    isRunning: false,
+    preset: '2m',
+    autoEnabled: false,
+    autoActive: false,
+    currentJobId: null,
   };
-  return labels[phase] || '';
+});
+
+function setStat(id, key, val) {
+  const el = $('stat-' + key + '-' + id);
+  if (!el) return;
+  el.textContent = (typeof val === 'number') ? val.toLocaleString('vi-VN') : val;
 }
 
-// ── Account selection ──────────────────────────────────────────────────────────
-function getSelectedAccountIds() {
-  return [...document.querySelectorAll('.acct-chk:checked')].map(c => parseInt(c.value));
+function resetStats(id) {
+  setStat(id, 'grand', '–');
+  setStat(id, 'total', '–');
+  setStat(id, 'done', 0);
+  setStat(id, 'fail', 0);
+  setStat(id, 'skip', 0);
+  if (accState[id]) accState[id].totalKnown = false;
 }
-function updateStartBtn() {
-  const has = getSelectedAccountIds().length > 0;
-  if (btnStart) btnStart.disabled = !has || isRunning;
-  const s = document.getElementById('btn-sync-now');
-  const a = document.getElementById('btn-enable-autosync');
-  if (s) s.disabled = !has || isRunning;
-  if (a) a.disabled = !has;
-}
-function toggleAllAccounts(checked) {
-  document.querySelectorAll('.acct-chk').forEach(c => c.checked = checked);
-  updateStartBtn();
-  buildAccountScheduleInputs();
-}
-updateStartBtn();
 
-// ── Mode switching ─────────────────────────────────────────────────────────────
-function switchMode(mode) {
-  currentMode = mode;
-  document.getElementById('panel-range').style.display    = mode === 'range'     ? 'block' : 'none';
-  document.getElementById('panel-autosync').style.display = mode === 'auto_sync' ? 'block' : 'none';
-  document.getElementById('tab-range').className     = 'btn btn-sm flex-grow-1 tab-btn ' + (mode === 'range'     ? 'btn-brand' : 'btn-outline-secondary');
-  document.getElementById('tab-autosync').className  = 'btn btn-sm flex-grow-1 tab-btn ' + (mode === 'auto_sync' ? 'btn-brand' : 'btn-outline-secondary');
+function _setPhase(id, phase) {
+  const st = accState[id];
+  if (!st) return;
+  st.phase = phase;
+}
 
-  const grpRange    = document.getElementById('btn-group-range');
-  const grpAutosync = document.getElementById('btn-group-autosync');
-  if (mode === 'auto_sync') {
-    grpRange.style.setProperty('display', 'none', 'important');
-    grpAutosync.style.setProperty('display', 'flex', 'important');
-    previewAutoSyncChunks();
-    buildAccountScheduleInputs();
-  } else {
-    grpRange.style.setProperty('display', 'flex', 'important');
-    grpAutosync.style.setProperty('display', 'none', 'important');
-    previewChunks();
+function setBadge(id, text, kind) {
+  const el = $('badge-' + id);
+  if (!el) return;
+  el.textContent = text;
+  const colors = {
+    idle:      ['var(--surface-2)', 'var(--text-secondary)', 'var(--border)'],
+    running:   ['var(--brand-dim)', 'var(--brand)', 'var(--brand-border)'],
+    scheduled: ['var(--surface-2)', 'var(--brand)', 'var(--brand-border)'],
+    active:    ['var(--success-bg)', 'var(--success)', 'var(--success-border)'],
+  };
+  const [bg, fg, bd] = colors[kind] || colors.idle;
+  el.style.background = bg; el.style.color = fg; el.style.borderColor = bd;
+}
+
+function updateGlobalIndicator() {
+  const anyRunning = Object.values(accState).some(s => s.isRunning);
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  if (dot) {
+    if (anyRunning) { dot.classList.remove('idle'); if (txt) txt.textContent = 'Crawler running…'; }
+    else            { dot.classList.add('idle');    if (txt) txt.textContent = 'Crawler idle'; }
   }
 }
 
-// ── Preset selector ───────────────────────────────────────────────────────────
-function selectPreset(btn, preset) {
-  currentPreset = preset;
-  document.querySelectorAll('.autosync-preset').forEach(b => {
+function setRunningRow(id, running) {
+  const st = accState[id];
+  if (st) st.isRunning = running;
+  const btnStop  = $('btn-stop-' + id);
+  const btnStart = $('btn-start-range-' + id);
+  const btnSync  = $('btn-sync-now-' + id);
+  if (btnStop)  btnStop.disabled  = !running;
+  if (btnStart) btnStart.disabled = running;
+  if (btnSync)  btnSync.disabled  = running;
+  if (running) setBadge(id, 'Đang chạy…', 'running');
+  else if (!(st && st.autoEnabled)) setBadge(id, 'Idle', 'idle');
+  updateGlobalIndicator();
+}
+
+// ── Log terminal ───────────────────────────────────────────────────────────────
+function _appendLog(accountId, msg) {
+  const el = $('log-' + accountId);
+  if (!el) return;
+
+  const placeholder = el.querySelector('[data-placeholder]');
+  if (placeholder) placeholder.remove();
+
+  const line = document.createElement('div');
+  line.style.cssText = 'padding:1px 0; white-space:pre-wrap; word-break:break-all;';
+
+  if (msg.startsWith('❌') || msg.includes('Thất bại') || msg.toLowerCase().includes('lỗi')) {
+    line.style.color = '#f85149';
+  } else if (msg.startsWith('✅') || msg.includes('Hoàn thành')) {
+    line.style.color = '#3fb950';
+  } else if (msg.startsWith('⚠️') || msg.startsWith('🔑')) {
+    line.style.color = '#d29922';
+  } else if (msg.startsWith('📡') || msg.startsWith('⚡') || msg.startsWith('🚀')) {
+    line.style.color = '#79c0ff';
+  } else {
+    line.style.color = '#c9d1d9';
+  }
+
+  line.textContent = msg;
+  el.appendChild(line);
+
+  while (el.children.length > 200) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearAcctLog(accountId) {
+  const el = $('log-' + accountId);
+  if (el) el.innerHTML = '<span data-placeholder="1" style="color:#6e7681;">▶ Cleared.</span>';
+}
+
+// ── Auto-sync display ──────────────────────────────────────────────────────────
+function applyAutoSyncForAccount(id, active, cfg) {
+  const st = accState[id];
+  if (!st) return;
+  const enabled = !!(cfg && cfg.enabled);
+  st.autoEnabled = enabled;
+  st.autoActive  = active;
+
+  const statusEl   = $('as-status-' + id);
+  const btnEnable  = $('btn-enable-as-' + id);
+  const btnDisable = $('btn-disable-as-' + id);
+
+  if (enabled) {
+    const sched = (cfg.account_schedules || []).find(s => s.account_id === id);
+    const hh = sched ? String(sched.run_hour).padStart(2, '0') : '19';
+    const mm = sched ? String(sched.run_minute).padStart(2, '0') : '00';
+    if (statusEl) {
+      statusEl.innerHTML = active
+        ? `<span style="color:var(--success);">● Đang chạy auto-sync…</span>`
+        : `📅 Đã lên lịch — chạy lúc <strong style="font-family:var(--font-mono);">${hh}:${mm}</strong> ICT hàng ngày`;
+    }
+    if (btnEnable) { btnEnable.disabled = true; btnEnable.innerHTML = '<i class="bi bi-check-circle-fill"></i> Đã lên lịch'; }
+    if (btnDisable) btnDisable.style.display = 'block';
+    if (!st.isRunning) setBadge(id, active ? 'Auto-sync chạy' : 'Đã lên lịch', active ? 'active' : 'scheduled');
+  } else {
+    if (statusEl) statusEl.innerHTML = '';
+    if (btnEnable) { btnEnable.disabled = false; btnEnable.innerHTML = '<i class="bi bi-arrow-repeat"></i> Kích hoạt'; }
+    if (btnDisable) btnDisable.style.display = 'none';
+    if (!st.isRunning) setBadge(id, 'Idle', 'idle');
+  }
+}
+
+// ── Preset buttons ─────────────────────────────────────────────────────────────
+function selectAcctPreset(id, btn, preset) {
+  accState[id].preset = preset;
+  document.querySelectorAll(`#acct-card-${id} .as-preset`).forEach(b => {
     b.classList.remove('active', 'btn-brand');
     b.classList.add('btn-outline-secondary');
   });
   btn.classList.remove('btn-outline-secondary');
   btn.classList.add('active', 'btn-brand');
-
-  document.getElementById('autosync-custom-dates').style.display = preset === 'custom_date' ? 'block' : 'none';
-
-  if (preset !== 'custom_date') {
-    const today = new Date();
-    const monthsMap = { '2m': 2, '6m': 6, '1y': 12 };
-    const start = new Date(today.getFullYear(), today.getMonth() - (monthsMap[preset] || 2), 1);
-    document.getElementById('autosync-start-date').value = toIso(start);
-    document.getElementById('autosync-end-date').value   = toIso(today);
-  }
-  previewAutoSyncChunks();
+  const customWrap = $('as-custom-' + id);
+  if (customWrap) customWrap.style.display = (preset === 'custom_date') ? 'flex' : 'none';
 }
 
-function toIso(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-// ── Per-account schedule inputs ───────────────────────────────────────────────
-function _accountNameById(aid) {
-  if (aid == null) return 'Mặc định';
-  const chk = document.querySelector(`.acct-chk[value="${aid}"]`);
-  if (!chk) return `#${aid}`;
-  const label = chk.closest('label');
-  return label ? (label.querySelector('.fw-600')?.textContent?.trim() || `#${aid}`) : `#${aid}`;
-}
-
-function buildAccountScheduleInputs() {
-  const container = document.getElementById('account-schedule-list');
-  if (!container) return;
-  const checked = getSelectedAccountIds();
-  if (checked.length === 0) {
-    container.innerHTML = '<div style="font-size:11px;color:var(--text-muted);">Chưa chọn tài khoản nào.</div>';
-    return;
-  }
-  const existing = {};
-  container.querySelectorAll('.acct-schedule-time').forEach(inp => {
-    existing[inp.dataset.accountId] = inp.value;
-  });
-  container.innerHTML = checked.map(aid => {
-    const name = _accountNameById(aid);
-    const val  = existing[String(aid)] || '19:00';
-    return `
-      <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
-        <span style="flex:1; font-weight:600;">${name}</span>
-        <input type="time" class="form-control form-control-sm acct-schedule-time"
-               data-account-id="${aid}" value="${val}"
-               style="width:130px; font-family:var(--font-mono);" />
-        <span style="font-size:10px; color:var(--text-muted);">ICT</span>
-      </div>`;
-  }).join('');
-}
-
-function getAccountSchedules() {
-  return [...document.querySelectorAll('.acct-schedule-time')].map(inp => {
-    const [h, m] = (inp.value || '19:00').split(':').map(Number);
-    return { account_id: parseInt(inp.dataset.accountId), run_hour: h, run_minute: m };
-  });
-}
-
-// ── Chunk previews ────────────────────────────────────────────────────────────
-let autoPreviewTimer = null;
-async function previewAutoSyncChunks() {
-  clearTimeout(autoPreviewTimer);
-  autoPreviewTimer = setTimeout(async () => {
-    const rangeEl = document.getElementById('autosync-range');
-    const chunkEl = document.getElementById('autosync-chunk-preview');
-    let url;
-    if (currentPreset === 'custom_date') {
-      const sd = document.getElementById('autosync-start-date').value;
-      const ed = document.getElementById('autosync-end-date').value;
-      if (!sd || !ed) { rangeEl.textContent = ''; chunkEl.textContent = ''; return; }
-      url = `/crawler/api/chunks-preview?start_date=${sd}&end_date=${ed}`;
-    } else {
-      const monthsMap = { '2m': 2, '6m': 6, '1y': 12 };
-      url = `/crawler/api/chunks-preview?months_back=${monthsMap[currentPreset]}`;
-    }
-    try {
-      const data   = await (await fetch(url)).json();
-      const chunks = data.chunks || [];
-      if (data.range_start) {
-        rangeEl.innerHTML = `📅 ${data.range_start} → ${data.range_end}`;
-      } else if (chunks.length) {
-        rangeEl.innerHTML = `📅 ${chunks[0].start} → ${chunks[chunks.length-1].end}`;
-      }
-      chunkEl.innerHTML = chunks.length
-        ? `<i class="bi bi-grid-3x3-gap"></i> ${chunks.length} chunk(s): ` +
-          chunks.map((c, i) => `<span style="color:var(--text-muted);">#${i+1}</span> ${c.start}→${c.end}`).join(' | ')
-        : '';
-    } catch(e) {}
-  }, 300);
-}
-
-let previewTimer = null;
-async function previewChunks() {
-  clearTimeout(previewTimer);
-  previewTimer = setTimeout(async () => {
-    const sd = document.getElementById('inp-start-date').value;
-    const ed = document.getElementById('inp-end-date').value;
-    if (!sd || !ed) return;
-    try {
-      const data   = await (await fetch(`/crawler/api/chunks-preview?start_date=${sd}&end_date=${ed}`)).json();
-      const chunks = data.chunks || [];
-      const preview = document.getElementById('chunk-preview');
-      if (chunks.length === 0) { preview.style.display = 'none'; return; }
-      document.getElementById('chunk-count').textContent = chunks.length;
-      document.getElementById('chunk-list').innerHTML    = chunks.map((c, i) =>
-        `<span style="color:var(--text-muted);">#${i+1}</span> ${c.start} → ${c.end}`
-      ).join('<br>');
-      preview.style.display = 'block';
-    } catch(e) {}
-  }, 300);
-}
-
-// ── Captcha ───────────────────────────────────────────────────────────────────
+// ── Captcha ────────────────────────────────────────────────────────────────────
 const captchaWidgets = {};
-function _captchaKey(account_id) { return account_id == null ? 'null' : String(account_id); }
-function _ensureCaptchaWidget(account_id, account_name) {
-  const key = _captchaKey(account_id);
-  if (captchaWidgets[key]) return captchaWidgets[key];
-  const label = account_name ? `🖼 Captcha — <strong>${account_name}</strong>` : '🖼 Nhập mã captcha:';
-  const div   = document.createElement('div');
-  div.id        = `captcha-widget-${key}`;
-  div.className = 'captcha-widget';
-  div.style.cssText = 'display:none; margin-bottom:10px; padding:12px 14px; background:var(--warning-bg,#fffbeb); border:1px solid var(--warning-border,#fde68a); border-radius:8px;';
+function _ensureCaptchaWidget(accountId) {
+  if (captchaWidgets[accountId]) return captchaWidgets[accountId];
+  const slot = $('captcha-slot-' + accountId);
+  if (!slot) return null;
+  const div = document.createElement('div');
+  div.style.cssText = 'margin-bottom:10px; padding:12px 14px; background:var(--warning-bg,#fffbeb); border:1px solid var(--warning-border,#fde68a); border-radius:8px;';
   div.innerHTML = `
-    <div style="font-size:12px; color:var(--warning); margin-bottom:8px; font-weight:600;">${label}</div>
+    <div style="font-size:12px; color:var(--warning); margin-bottom:8px; font-weight:600;">🖼 Nhập mã captcha:</div>
     <img class="captcha-img" src="" alt="captcha"
         style="display:block; border-radius:6px; margin-bottom:10px; image-rendering:pixelated; height:48px; border:1px solid var(--border);" />
     <div class="d-flex gap-2">
       <input class="captcha-input form-control form-control-sm" type="text"
             placeholder="Nhập mã…" maxlength="10"
             style="font-family:var(--font-mono); letter-spacing:3px; text-transform:uppercase; width:160px;" />
-      <button class="btn btn-sm btn-brand" onclick="submitCaptcha('${key}')">
-        <i class="bi bi-check-lg"></i> Xác nhận
-      </button>
-      <button class="btn btn-sm btn-outline-secondary" onclick="refreshCaptcha('${key}')">
-        <i class="bi bi-arrow-clockwise"></i>
-      </button>
+      <button class="btn btn-sm btn-brand" onclick="submitCaptcha(${accountId})"><i class="bi bi-check-lg"></i> Xác nhận</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="refreshCaptcha(${accountId})"><i class="bi bi-arrow-clockwise"></i></button>
     </div>`;
   div.querySelector('.captcha-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') submitCaptcha(key);
+    if (e.key === 'Enter') submitCaptcha(accountId);
   });
-  document.getElementById('captcha-container').appendChild(div);
-  captchaWidgets[key] = div;
+  slot.appendChild(div);
+  captchaWidgets[accountId] = div;
   return div;
 }
 
-socket.on('crawler_captcha', (data) => {
-  const key    = _captchaKey(data.account_id);
-  const widget = _ensureCaptchaWidget(data.account_id, data.account_name || '');
-  widget.querySelector('.captcha-img').src   = 'data:image/png;base64,' + data.image;
-  widget.querySelector('.captcha-input').value = '';
-  widget.style.display = 'block';
-  setTimeout(() => widget.querySelector('.captcha-input').focus(), 100);
-  appendLog(`🖼 Captcha${data.account_name ? ' (' + data.account_name + ')' : ''} — vui lòng nhập mã…`, 'warn', data.account_id);
-});
-socket.on('crawler_done', (data) => {
-  if (data && data.account_id != null) {
-    const w = captchaWidgets[_captchaKey(data.account_id)];
-    if (w) w.style.display = 'none';
-  } else {
-    Object.values(captchaWidgets).forEach(w => w.style.display = 'none');
-  }
-});
-socket.on('crawler_captcha_refresh', (data) => {
-  const w = captchaWidgets[_captchaKey(data && data.account_id)];
-  if (w) w.querySelector('.captcha-input').value = '';
-});
-
-async function submitCaptcha(key) {
-  key = key || 'null';
-  const widget = captchaWidgets[key];
+async function submitCaptcha(accountId) {
+  const widget = captchaWidgets[accountId];
   if (!widget) return;
-  const text = widget.querySelector('.captcha-input').value.trim().toUpperCase();
-  if (!text) { widget.querySelector('.captcha-input').focus(); return; }
+  const input = widget.querySelector('.captcha-input');
+  const text = (input.value || '').trim().toUpperCase();
+  if (!text) { input.focus(); return; }
   widget.style.display = 'none';
-  const account_id = key === 'null' ? null : parseInt(key);
   try {
     await fetch('/crawler/api/captcha', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answer: text, account_id }),
+      body: JSON.stringify({ answer: text, account_id: accountId }),
     });
-  } catch(e) { appendLog('❌ Lỗi gửi captcha: ' + e, 'error'); }
+  } catch (e) {}
 }
-async function refreshCaptcha(key) {
-  key = key || 'null';
-  const account_id = key === 'null' ? null : parseInt(key);
+
+async function refreshCaptcha(accountId) {
   try {
     await fetch('/crawler/api/captcha/refresh', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account_id }),
+      body: JSON.stringify({ account_id: accountId }),
     });
-  } catch(e) {}
+  } catch (e) {}
 }
 
-// ── Log tabs (theo account) ───────────────────────────────────────────────────
-function _ensureLogTab(account_id) {
-  const key = _accKey(account_id);
-  if (key === '_legacy' || _logTabsSeen.has(key)) return;
-  _logTabsSeen.add(key);
-  _logBuffers[key] = [];
-  const tabsEl = document.getElementById('log-tabs');
-  const btn = document.createElement('button');
-  btn.className = 'btn btn-sm log-tab-btn';
-  btn.dataset.tab = key;
-  btn.textContent = _accountNameById(account_id);
-  btn.style.cssText = 'font-size:11px; padding:2px 10px;';
-  btn.onclick = () => switchLogTab(key);
-  tabsEl.appendChild(btn);
-}
-
-function switchLogTab(key) {
-  _activeLogTab = key;
-  document.querySelectorAll('.log-tab-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === key);
-  });
-  _renderLogTerminal();
-}
-
-function _renderLogTerminal() {
-  const buf = _logBuffers[_activeLogTab] || [];
-  logEl.innerHTML = buf.length
-    ? buf.map(l => `<div class="log-${l.level}">${l.text}</div>`).join('')
-    : '<span class="log-info">▶ Chưa có log…</span>';
-  logEl.scrollTop = logEl.scrollHeight;
-}
-
-// ── Log helpers ───────────────────────────────────────────────────────────────
-function _escHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-function appendLog(msg, level = 'info', account_id) {
-  const ts   = new Date().toLocaleTimeString('vi-VN');
-  const text = `[${ts}] ${_escHtml(msg)}`;
-  const key  = account_id !== undefined ? _accKey(account_id) : 'all';
-
-  if (key !== 'all') _ensureLogTab(account_id);
-
-  // Lưu vào buffer "all" (mọi log) và buffer riêng của account (nếu có)
-  _logBuffers['all'].push({ text, level });
-  if (key !== 'all' && key !== '_legacy') {
-    _logBuffers[key].push({ text, level });
-  } else if (key === '_legacy') {
-    _logBuffers['_legacy'] = _logBuffers['_legacy'] || [];
-    _logBuffers['_legacy'].push({ text, level });
-  }
-
-  // Chỉ render lên DOM nếu tab đang xem khớp ('all' luôn nhận mọi log)
-  if (_activeLogTab === 'all' || _activeLogTab === key) {
-    const line = document.createElement('div');
-    line.className = `log-${level}`;
-    line.innerHTML = text;
-    logEl.appendChild(line);
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-}
-
-function clearLogs() {
-  Object.keys(_logBuffers).forEach(k => _logBuffers[k] = []);
-  logEl.innerHTML = '<span class="log-info">▶ Logs cleared.</span>';
-}
-
-// ── Socket: crawler_log ───────────────────────────────────────────────────────
-socket.on('crawler_log', (data) => {
-  const msg = data.message || '';
-  const key = _accKey(data.account_id);
-  const st  = _getAccState(key);
-
-  // Phát hiện phase từ nội dung
-  if (msg.includes('Phase 1') || msg.includes('Thu thập danh sách')) {
-    st.phase = 'gather'; st.totalKnown = false;
-    _updateProgressBlockPhase(key, data.account_id);
-  } else if (msg.includes('Phase 2') || (msg.includes('Tải ') && msg.includes('song song'))) {
-    if (st.phase !== 'process') { st.phase = 'process'; st.startTs = Date.now(); _updateProgressBlockPhase(key, data.account_id); }
-  } else if (msg.includes('Hoàn thành') || (msg.includes('✅') && msg.includes('processed='))) {
-    st.phase = 'done';
-    _updateProgressBlockPhase(key, data.account_id);
-    _setProgressDone(key);
-  }
-
-  // Trong gather: spinner mode nếu total chưa biết
-  if (st.phase === 'gather' && !st.totalKnown) {
-    _setProgressGathering(key, data.account_id);
-  }
-
-  let level = 'info';
-  if (msg.includes('✓') || msg.includes('✅')) level = 'success';
-  else if (msg.includes('⚠') || msg.includes('⛔') || msg.includes('🔑')) level = 'warn';
-  else if (msg.includes('❌') || msg.includes('✗') || msg.includes('Thất bại')) level = 'error';
-  else if (msg.includes('──') || msg.includes('─')) level = 'info';
-  appendLog(msg, level, data.account_id);
+socket.on('crawler_captcha', (data) => {
+  const aid = data.account_id;
+  if (aid == null) return;
+  const widget = _ensureCaptchaWidget(aid);
+  if (!widget) return;
+  widget.querySelector('.captcha-img').src     = 'data:image/png;base64,' + data.image;
+  widget.querySelector('.captcha-input').value = '';
+  widget.style.display = 'block';
+  setTimeout(() => widget.querySelector('.captcha-input').focus(), 100);
 });
 
-// ── Progress blocks (1 block / account) ───────────────────────────────────────
-function _ensureProgressBlock(key, account_id) {
-  let block = document.getElementById(`prog-block-${key}`);
-  if (block) return block;
+socket.on('crawler_captcha_refresh', (data) => {
+  const aid = data && data.account_id;
+  const w = aid != null ? captchaWidgets[aid] : null;
+  if (w) w.querySelector('.captcha-input').value = '';
+});
 
-  const wrap = document.getElementById('progress-accounts-wrap');
-  block = document.createElement('div');
-  block.id = `prog-block-${key}`;
-  block.className = 'progress-account-block';
-  block.style.cssText = 'padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-0);';
-  block.innerHTML = `
-    <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:4px; display:flex; justify-content:space-between;">
-      <span>${_accountNameById(account_id)}</span>
-      <span class="pb-phase" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--brand);"></span>
-    </div>
-    <div class="d-flex justify-content-between mb-1" style="font-size:11px; color:var(--text-secondary);">
-      <span class="pb-label">Initialising…</span>
-      <span class="pb-pct" style="font-weight:700; color:var(--brand); font-family:var(--font-mono);">–</span>
-    </div>
-    <div class="progress mb-1" style="height:8px; border-radius:6px;">
-      <div class="pb-bar progress-bar progress-bar-striped progress-bar-animated" style="width:0%; transition:width 0.35s ease;"></div>
-    </div>
-    <div class="pb-eta" style="font-size:9px; color:var(--text-muted); text-align:right; min-height:12px; font-family:var(--font-mono);"></div>
-    <div class="row mt-2 text-center" style="font-size:11px;">
-      <div class="col">
-        <div class="pb-total fw-bold" style="font-size:16px; font-family:var(--font-mono); color:var(--brand);">–</div>
-        <div style="color:var(--text-muted); font-size:10px;">Cần tải</div>
-      </div>
-      <div class="col">
-        <div class="pb-done fw-bold" style="font-size:16px; font-family:var(--font-mono); color:var(--success);">0</div>
-        <div style="color:var(--text-muted); font-size:10px;">Thành công</div>
-      </div>
-      <div class="col">
-        <div class="pb-fail fw-bold" style="font-size:16px; font-family:var(--font-mono); color:var(--danger);">0</div>
-        <div style="color:var(--text-muted); font-size:10px;">Lỗi</div>
-      </div>
-      <div class="col">
-        <div class="pb-skip fw-bold" style="font-size:16px; font-family:var(--font-mono); color:var(--text-muted);">0</div>
-        <div style="color:var(--text-muted); font-size:10px;">Bỏ qua</div>
-      </div>
-    </div>`;
-  wrap.appendChild(block);
-  progCard.style.setProperty('display', 'block', 'important');
-  return block;
-}
+// ── Socket: log ────────────────────────────────────────────────────────────────
+socket.on('crawler_log', (data) => {
+  const aid = data.account_id;
+  const msg = data.message || '';
 
-function _resetProgressBlock(key, account_id) {
-  const st = _getAccState(key);
-  st.phase = 'gather'; st.totalKnown = false; st.startTs = null;
-  const block = _ensureProgressBlock(key, account_id);
-  block.querySelector('.pb-total').textContent = '–';
-  block.querySelector('.pb-done').textContent  = '0';
-  block.querySelector('.pb-fail').textContent  = '0';
-  block.querySelector('.pb-skip').textContent  = '0';
-  const bar = block.querySelector('.pb-bar');
-  bar.style.width = '0%';
-  bar.classList.add('progress-bar-striped', 'progress-bar-animated');
-  block.querySelector('.pb-pct').textContent   = '–';
-  block.querySelector('.pb-label').textContent = 'Thu thập danh sách hóa đơn…';
-  block.querySelector('.pb-eta').textContent   = '';
-  block.querySelector('.pb-phase').textContent = _phaseLabel('gather');
-}
+  if (aid != null && accState[aid] !== undefined) {
+    _appendLog(aid, msg);
+  } else if (aid == null) {
+    ACCOUNTS.forEach(a => _appendLog(a.id, msg));
+  }
 
-function _updateProgressBlockPhase(key, account_id) {
-  const block = _ensureProgressBlock(key, account_id);
-  const st = _getAccState(key);
-  block.querySelector('.pb-phase').textContent = _phaseLabel(st.phase);
-}
+  if (aid == null || !accState[aid]) return;
+  const st = accState[aid];
+  if (msg.includes('Phase 1') || msg.includes('Thu thập danh sách')) {
+    st.totalKnown = false;
+    _setPhase(aid, 'gather');
+  } else if (msg.includes('Phase 2') || (msg.includes('Tải ') && msg.includes('hóa đơn'))) {
+    if (st.phase !== 'process') { st.startTs = Date.now(); _setPhase(aid, 'process'); }
+  } else if (msg.includes('Hoàn thành')) {
+    _setPhase(aid, 'done');
+  }
+});
 
-function _setProgressGathering(key, account_id) {
-  const block = _ensureProgressBlock(key, account_id);
-  const bar = block.querySelector('.pb-bar');
-  bar.classList.add('progress-bar-striped', 'progress-bar-animated');
-  block.querySelector('.pb-pct').textContent   = '–';
-  block.querySelector('.pb-label').textContent = 'Thu thập danh sách hóa đơn…';
-}
-
-function _setProgressDone(key) {
-  const block = document.getElementById(`prog-block-${key}`);
-  if (!block) return;
-  block.querySelector('.pb-bar').classList.remove('progress-bar-striped', 'progress-bar-animated');
-  block.querySelector('.pb-pct').textContent = '100%';
-  block.querySelector('.pb-bar').style.width = '100%';
-  block.querySelector('.pb-eta').textContent = '';
-}
-
-// ── Socket: crawler_progress ──────────────────────────────────────────────────
+// ── Socket: progress ───────────────────────────────────────────────────────────
 socket.on('crawler_progress', (data) => {
-  const key = _accKey(data.account_id);
-  const st  = _getAccState(key);
-  const block = _ensureProgressBlock(key, data.account_id);
+  const aid = data.account_id;
+  if (aid == null || !accState[aid]) return;
+
+  const st = accState[aid];
+
+  // Reset stats nếu job_id mới
+  if (data.job_id != null && st.currentJobId !== data.job_id) {
+    st.currentJobId = data.job_id;
+    resetStats(aid);
+  }
 
   const total   = data.total   || 0;
   const done    = data.done    || 0;
   const failed  = data.failed  || 0;
   const skipped = data.skipped || 0;
 
-  block.querySelector('.pb-done').textContent  = done.toLocaleString('vi-VN');
-  block.querySelector('.pb-fail').textContent  = failed.toLocaleString('vi-VN');
-  block.querySelector('.pb-skip').textContent  = skipped.toLocaleString('vi-VN');
+  setStat(aid, 'done', done);
+  setStat(aid, 'fail', failed);
+  setStat(aid, 'skip', skipped);
 
   if (total > 0) {
     st.totalKnown = true;
-    if (st.phase !== 'process' && st.phase !== 'done') {
-      st.phase = 'process';
-      st.startTs = Date.now();
-      _updateProgressBlockPhase(key, data.account_id);
-    }
-
-    block.querySelector('.pb-total').textContent = total.toLocaleString('vi-VN');
-
-    const finished = done + failed;
-    const pct      = Math.min(100, Math.round(finished / total * 100));
-    const bar      = block.querySelector('.pb-bar');
-    bar.style.width = pct + '%';
-    bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-    block.querySelector('.pb-pct').textContent = pct + '%';
-
-    const remaining = total - finished;
-    block.querySelector('.pb-label').textContent =
-      finished.toLocaleString('vi-VN') + ' / ' + total.toLocaleString('vi-VN') +
-      (remaining > 0 ? ` — còn ${remaining.toLocaleString('vi-VN')}` : ' — hoàn thành');
-
-    // ETA estimate
-    const etaEl = block.querySelector('.pb-eta');
-    if (st.startTs && finished > 0 && remaining > 0) {
-      const elapsed = (Date.now() - st.startTs) / 1000;
-      const rate    = finished / elapsed;
-      const eta     = Math.round(remaining / rate);
-      const mm      = Math.floor(eta / 60);
-      const ss      = eta % 60;
-      etaEl.textContent = `ETA ~${mm > 0 ? mm + 'm ' : ''}${ss}s`;
-    } else {
-      etaEl.textContent = '';
-    }
-  } else {
-    block.querySelector('.pb-total').textContent = '–';
-    const bar = block.querySelector('.pb-bar');
-    bar.style.width = '0%';
-    bar.classList.add('progress-bar-striped', 'progress-bar-animated');
-    block.querySelector('.pb-pct').textContent   = '–';
-    block.querySelector('.pb-label').textContent = 'Thu thập danh sách hóa đơn…';
+    setStat(aid, 'total', total);
+    setStat(aid, 'grand', total + skipped);
+    if (st.phase !== 'done') _setPhase(aid, 'process');
   }
-
-  progCard.style.setProperty('display', 'block', 'important');
 });
 
-// ── UI state ──────────────────────────────────────────────────────────────────
-function _renderAccountSchedules(schedules) {
-  const container = document.getElementById('asc-schedules');
-  if (!container) return;
-  const pad = n => String(n).padStart(2, '0');
-  const now = new Date();
-  container.innerHTML = (schedules || []).map(s => {
-    const h = s.run_hour ?? 19, m = s.run_minute ?? 0;
-    const next = new Date(now);
-    next.setHours(h, m, 0, 0);
-    if (now >= next) next.setDate(next.getDate() + 1);
-    const nextStr = `${next.getDate()}/${pad(next.getMonth()+1)}/${next.getFullYear()} ${pad(h)}:${pad(m)}`;
-    return `<div>🕖 <strong>${_accountNameById(s.account_id)}</strong>: chạy lúc <strong style="font-family:var(--font-mono);">${pad(h)}:${pad(m)}</strong> — tiếp theo ${nextStr}</div>`;
-  }).join('');
-}
+// ── Socket: done ───────────────────────────────────────────────────────────────
+socket.on('crawler_done', (data) => {
+  const aid = data && data.account_id;
+  if (aid == null || !accState[aid]) return;
+  _setPhase(aid, 'done');
+  setRunningRow(aid, false);
+  _appendLog(aid, '✅ Crawl hoàn thành.');
+  const w = captchaWidgets[aid];
+  if (w) w.style.display = 'none';
+});
 
-function setAutoSync(active, cfg) {
-  isAutoSync = active;
-  const isEnabled = active || (cfg && cfg.enabled);
-  const badge = document.getElementById('auto-sync-badge');
-  if (badge) badge.style.display = active ? 'inline-flex' : 'none';
-  const card = document.getElementById('autosync-status-card');
-  if (card) card.style.display = isEnabled ? 'block' : 'none';
-
-  if (isEnabled && cfg) {
-    const presetLabels = { '2m':'2 tháng','6m':'6 tháng','1y':'1 năm','custom_date':'Tùy chỉnh' };
-    const presetEl = document.getElementById('asc-preset');
-    if (presetEl) presetEl.textContent = presetLabels[cfg.preset] || cfg.preset;
-    const activatedEl = document.getElementById('asc-activated-at');
-    if (activatedEl && cfg.activated_at) activatedEl.textContent = cfg.activated_at.replace('T', ' ');
-    const schedules = cfg.account_schedules || [
-      { account_id: cfg.account_id ?? null, run_hour: cfg.run_hour ?? 19, run_minute: cfg.run_minute ?? 0 }
-    ];
-    _renderAccountSchedules(schedules);
-    schedules.forEach(s => {
-      const inp = document.querySelector(`.acct-schedule-time[data-account-id="${s.account_id}"]`);
-      if (inp) inp.value = `${String(s.run_hour ?? 19).padStart(2,'0')}:${String(s.run_minute ?? 0).padStart(2,'0')}`;
+// ── Socket: auto_sync_state ────────────────────────────────────────────────────
+socket.on('auto_sync_state', (data) => {
+  if (data.account_id != null) {
+    applyAutoSyncForAccount(data.account_id, data.active, data.config);
+    return;
+  }
+  if (data.config && data.config.enabled && data.config.account_schedules) {
+    const ids = new Set(data.config.account_schedules.map(s => s.account_id));
+    ACCOUNTS.forEach(a => {
+      if (ids.has(a.id)) applyAutoSyncForAccount(a.id, false, data.config);
+      else applyAutoSyncForAccount(a.id, false, null);
     });
-    document.querySelectorAll('.autosync-preset').forEach(b => b.disabled = true);
-    document.querySelectorAll('.acct-schedule-time').forEach(i => i.disabled = true);
-    const btnEnable = document.getElementById('btn-enable-autosync');
-    if (btnEnable) {
-      btnEnable.disabled = true;
-      btnEnable.innerHTML = active
-        ? '<i class="bi bi-arrow-repeat"></i> Đang chạy…'
-        : '<i class="bi bi-check-circle-fill"></i> Đã lên lịch';
-    }
-    const btnSyncNow = document.getElementById('btn-sync-now');
-    if (btnSyncNow) btnSyncNow.disabled = isRunning;
   } else {
-    document.querySelectorAll('.autosync-preset').forEach(b => b.disabled = false);
-    document.querySelectorAll('.acct-schedule-time').forEach(i => i.disabled = false);
-    const btnEnable = document.getElementById('btn-enable-autosync');
-    if (btnEnable) { btnEnable.disabled = false; btnEnable.innerHTML = '<i class="bi bi-arrow-repeat"></i> Kích hoạt Auto Sync'; }
+    ACCOUNTS.forEach(a => applyAutoSyncForAccount(a.id, false, null));
   }
-  document.getElementById('tab-autosync').disabled = isEnabled;
-  if (isEnabled) switchMode('auto_sync');
+});
+
+// ── Actions: manual range crawl ───────────────────────────────────────────────
+async function startRangeCrawl(accountId) {
+  const sd = $('range-start-' + accountId).value;
+  const ed = $('range-end-' + accountId).value;
+  if (!sd || !ed) { alert('Vui lòng chọn ngày bắt đầu và kết thúc.'); return; }
+  const [sy, sm] = sd.split('-'); const [ey, em] = ed.split('-');
+  const body = {
+    mode: 'range', account_ids: [accountId],
+    start_date: sd, end_date: ed,
+    start_month: parseInt(sm), start_year: parseInt(sy),
+    end_month: parseInt(em), end_year: parseInt(ey),
+  };
+  try {
+    const res  = await fetch('/crawler/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.ok) {
+      resetStats(accountId);
+      accState[accountId].currentJobId = null;
+      _setPhase(accountId, 'gather');
+      setRunningRow(accountId, true);
+      ACCOUNTS.forEach(a => applyAutoSyncForAccount(a.id, false, null));
+    } else {
+      alert(data.error || 'Lỗi không xác định');
+    }
+  } catch (e) { alert('Request thất bại: ' + e); }
 }
 
-function setRunning(running) {
-  isRunning = running;
-  btnStop.disabled = !running;
-  const btnStopAuto = document.getElementById('btn-stop-auto');
-  if (btnStopAuto) btnStopAuto.disabled = !running;
-  updateStartBtn();
-  if (!running) {
-    // Đánh dấu 'done' cho mọi block đang chạy (không biết account nào đã stop cụ thể)
-    Object.keys(_accStates).forEach(key => {
-      if (_accStates[key].phase !== 'idle') {
-        _accStates[key].phase = 'done';
-        const block = document.getElementById(`prog-block-${key}`);
-        if (block) {
-          block.querySelector('.pb-phase').textContent = _phaseLabel('done');
-          block.querySelector('.pb-bar').classList.remove('progress-bar-striped', 'progress-bar-animated');
-        }
+async function stopAccount(accountId) {
+  try {
+    const res  = await fetch('/crawler/api/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: accountId }) });
+    const data = await res.json();
+    setRunningRow(accountId, false);
+    if (data.auto_sync_cancelled) {
+      ACCOUNTS.forEach(a => applyAutoSyncForAccount(a.id, false, null));
+    }
+  } catch (e) { alert('Lỗi: ' + e); }
+}
+
+// ── Actions: auto sync ────────────────────────────────────────────────────────
+async function enableAutoSyncAccount(accountId) {
+  const preset  = accState[accountId].preset;
+  const timeVal = $('as-time-' + accountId).value || '19:00';
+  const [hh, mm] = timeVal.split(':').map(Number);
+
+  let body = {};
+  if (preset === 'custom_date') {
+    const sd = $('as-start-' + accountId).value;
+    const ed = $('as-end-' + accountId).value;
+    if (!sd || !ed) { alert('Vui lòng chọn ngày tùy chỉnh.'); return; }
+    body.mode = 'custom_date'; body.start_date = sd; body.end_date = ed;
+  } else {
+    body.mode = preset;
+  }
+
+  try {
+    const statusRes = await fetch('/crawler/api/status');
+    const statusData = await statusRes.json();
+    const existingCfg = statusData.auto_sync_config || {};
+    let schedules = (existingCfg.enabled && existingCfg.account_schedules) ? existingCfg.account_schedules.slice() : [];
+    schedules = schedules.filter(s => s.account_id !== accountId);
+    schedules.push({ account_id: accountId, run_hour: hh, run_minute: mm });
+    body.account_schedules = schedules;
+  } catch (e) {
+    body.account_schedules = [{ account_id: accountId, run_hour: hh, run_minute: mm }];
+  }
+
+  try {
+    const res  = await fetch('/crawler/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!data.ok) alert(data.error || 'Lỗi không xác định');
+  } catch (e) { alert('Request thất bại: ' + e); }
+}
+
+async function disableAutoSyncAccount(accountId) {
+  if (!confirm('Hủy auto-sync cho tài khoản này?')) return;
+  try {
+    const statusRes = await fetch('/crawler/api/status');
+    const statusData = await statusRes.json();
+    const existingCfg = statusData.auto_sync_config || {};
+    const remaining = (existingCfg.account_schedules || []).filter(s => s.account_id !== accountId);
+
+    if (remaining.length === 0) {
+      await fetch('/crawler/api/auto-sync/disable', { method: 'POST' });
+    } else {
+      const body = { mode: existingCfg.preset, account_schedules: remaining };
+      if (existingCfg.preset === 'custom_date') {
+        body.start_date = existingCfg.start_date;
+        body.end_date   = existingCfg.end_date;
       }
-    });
-  }
-  const dot = document.getElementById('status-dot');
-  const txt = document.getElementById('status-text');
-  if (dot) {
-    if (running) { dot.classList.remove('idle'); txt.textContent = 'Crawler running…'; }
-    else         { dot.classList.add('idle');    txt.textContent = 'Crawler idle'; }
-  }
+      await fetch('/crawler/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    }
+    applyAutoSyncForAccount(accountId, false, null);
+  } catch (e) { alert('Lỗi: ' + e); }
 }
 
-// ── Sync Ngay ─────────────────────────────────────────────────────────────────
-async function syncNow() {
-  const accountIds = getSelectedAccountIds();
-  if (accountIds.length === 0) { appendLog('❌ Vui lòng chọn ít nhất một tài khoản.', 'error'); return; }
-  let body = { account_ids: accountIds };
-  if (currentPreset === 'custom_date') {
-    const sd = document.getElementById('autosync-start-date').value;
-    const ed = document.getElementById('autosync-end-date').value;
-    if (!sd || !ed) { appendLog('❌ Vui lòng chọn ngày tùy chỉnh.', 'error'); return; }
-    body.mode = 'range'; body.start_date = sd; body.end_date = ed;
-    const [sy, sm] = sd.split('-'); const [ey, em] = ed.split('-');
-    body.start_month = parseInt(sm); body.start_year = parseInt(sy);
-    body.end_month   = parseInt(em); body.end_year   = parseInt(ey);
+async function syncNowAccount(accountId) {
+  const preset = accState[accountId].preset;
+  const today  = new Date();
+  let start_date, end_date;
+
+  if (preset === 'custom_date') {
+    start_date = $('as-start-' + accountId).value;
+    end_date   = $('as-end-' + accountId).value;
+    if (!start_date || !end_date) { alert('Vui lòng chọn ngày tùy chỉnh.'); return; }
   } else {
     const monthsMap = { '2m': 2, '6m': 6, '1y': 12 };
-    const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth() - (monthsMap[currentPreset] || 2), 1);
-    const sd = toIso(start); const ed = toIso(today);
-    body.mode = 'range'; body.start_date = sd; body.end_date = ed;
-    const [sy, sm] = sd.split('-'); const [ey, em] = ed.split('-');
-    body.start_month = parseInt(sm); body.start_year = parseInt(sy);
-    body.end_month   = parseInt(em); body.end_year   = parseInt(ey);
+    const start = new Date(today.getFullYear(), today.getMonth() - (monthsMap[preset] || 2), 1);
+    start_date = toIso(start); end_date = toIso(today);
   }
-  appendLog(`⚡ Sync ngay…`, 'info');
+
+  const [sy, sm] = start_date.split('-'); const [ey, em] = end_date.split('-');
+  const body = {
+    mode: 'range', account_ids: [accountId],
+    start_date, end_date,
+    start_month: parseInt(sm), start_year: parseInt(sy),
+    end_month: parseInt(em), end_year: parseInt(ey),
+  };
+
   try {
     const res  = await fetch('/crawler/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (data.ok) {
-      accountIds.forEach(aid => _resetProgressBlock(_accKey(aid), aid));
-      appendLog(`✓ Đã xếp hàng ${data.total_chunks || 1} chunk.`, 'success');
-      setRunning(true);
-    } else { appendLog(`❌ ${data.error}`, 'error'); }
-  } catch (e) { appendLog(`❌ Request thất bại: ${e}`, 'error'); }
-}
-
-// ── Start / Stop ──────────────────────────────────────────────────────────────
-async function startCrawl() {
-  const accountIds = getSelectedAccountIds();
-  if (accountIds.length === 0) { appendLog('❌ Vui lòng chọn ít nhất một tài khoản.', 'error'); return; }
-  let body = { mode: currentMode, account_ids: accountIds };
-
-  if (currentMode === 'range') {
-    const sd = document.getElementById('inp-start-date').value;
-    const ed = document.getElementById('inp-end-date').value;
-    if (!sd || !ed) { appendLog('❌ Vui lòng chọn ngày bắt đầu và kết thúc.', 'error'); return; }
-    body.start_date = sd; body.end_date = ed;
-    const [sy, sm] = sd.split('-'); const [ey, em] = ed.split('-');
-    body.start_month = parseInt(sm); body.start_year = parseInt(sy);
-    body.end_month   = parseInt(em); body.end_year   = parseInt(ey);
-  } else {
-    if (currentPreset === 'custom_date') {
-      const sd = document.getElementById('autosync-start-date').value;
-      const ed = document.getElementById('autosync-end-date').value;
-      if (!sd || !ed) { appendLog('❌ Vui lòng chọn ngày tùy chỉnh.', 'error'); return; }
-      body.mode = 'custom_date'; body.start_date = sd; body.end_date = ed;
+      resetStats(accountId);
+      accState[accountId].currentJobId = null;
+      _setPhase(accountId, 'gather');
+      setRunningRow(accountId, true);
+      ACCOUNTS.forEach(a => applyAutoSyncForAccount(a.id, false, null));
     } else {
-      body.mode = currentPreset;
+      alert(data.error || 'Lỗi không xác định');
     }
-    const schedules = getAccountSchedules();
-    if (schedules.length === 0) { appendLog('❌ Vui lòng chọn ít nhất một tài khoản.', 'error'); return; }
-    body.account_schedules = schedules;
-  }
-
-  const modeLabel = { 'range':'Date Range','2m':'2 tháng','6m':'6 tháng','1y':'1 năm','custom_date':'Tùy chỉnh' }[body.mode] || body.mode;
-  appendLog(`▶ Bắt đầu crawl — chế độ: ${modeLabel}…`, 'info');
-
-  try {
-    const res  = await fetch('/crawler/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const data = await res.json();
-    if (data.ok) {
-      if (data.scheduled_only) {
-        appendLog(`🕐 ${data.message || 'Auto-sync đã được lên lịch.'}`, 'success');
-      } else {
-        accountIds.forEach(aid => _resetProgressBlock(_accKey(aid), aid));
-        const n = data.total_chunks || data.chunks?.length || 1;
-        appendLog(`✓ Đã xếp hàng ${n} chunk. Đang chạy…`, 'success');
-        setRunning(true);
-      }
-    } else { appendLog(`❌ ${data.error}`, 'error'); }
-  } catch (e) { appendLog(`❌ Request thất bại: ${e}`, 'error'); }
+  } catch (e) { alert('Request thất bại: ' + e); }
 }
 
-async function stopCrawl() {
-  appendLog('⛔ Sending stop signal…', 'warn');
-  const res  = await fetch('/crawler/api/stop', { method: 'POST' });
-  const data = await res.json();
-  appendLog(data.message, data.ok ? 'warn' : 'error');
-  if (data.ok) setRunning(false);
-}
-
-async function cancelAutoSync() {
-  if (!confirm('Bạn có chắc muốn hủy Auto-Sync?')) return;
-  try {
-    const res  = await fetch('/crawler/api/auto-sync/disable', { method: 'POST' });
-    const data = await res.json();
-    if (data.ok) { setAutoSync(false, null); appendLog('🔕 Auto-sync đã được hủy.', 'warn'); }
-    else { appendLog(`❌ ${data.error}`, 'error'); }
-  } catch (e) { appendLog(`❌ Lỗi: ${e}`, 'error'); }
-}
-
-// ── Socket events ─────────────────────────────────────────────────────────────
-socket.on('auto_sync_state', (data) => {
-  setAutoSync(data.active, data.config || null);
-  const accLabel = data.account_id != null ? ` — ${_accountNameById(data.account_id)}` : '';
-  if (data.active)                          appendLog(`▶ Auto-sync đang chạy${accLabel}.`, 'info', data.account_id);
-  else if (data.config && data.config.enabled) appendLog(`📅 Auto-sync đã lên lịch${accLabel}.`, 'info', data.account_id);
-  else                                      appendLog(`🔕 Auto-sync đã tắt${accLabel}.`, 'warn', data.account_id);
-});
-
-socket.on('crawler_done', (data) => {
-  const key = _accKey(data && data.account_id);
-  appendLog('✅ Crawl completed.', 'success', data && data.account_id);
-  _setProgressDone(key);
-  const st = _getAccState(key);
-  st.phase = 'done';
-  _updateProgressBlockPhase(key, data && data.account_id);
-
-  // Nếu không còn account nào đang chạy → cập nhật nút Start/Stop chung
-  // (trạng thái is_running tổng sẽ được polling /api/status cập nhật chính xác)
-});
-
-// ── Polling ───────────────────────────────────────────────────────────────────
+// ── Polling fallback (every 5s) — chỉ cập nhật running state và auto-sync ─────
 setInterval(async () => {
   try {
     const res  = await fetch('/crawler/api/status');
     const data = await res.json();
-    setRunning(data.is_running);
-    setAutoSync(!!data.auto_sync_active, data.auto_sync_config || null);
 
-    if (data.running_job) {
-      const j   = data.running_job;
-      const aid = j.account_id;
-      const key = _accKey(aid);
-      const st  = _getAccState(key);
-      if (j.total_invoices > 0 && !st.totalKnown) {
-        st.totalKnown = true;
-        st.phase = 'process';
-        st.startTs = Date.now();
-        _updateProgressBlockPhase(key, aid);
+    ACCOUNTS.forEach(a => {
+      const running = (data.active_account_ids || []).includes(a.id);
+      setRunningRow(a.id, running);
+    });
 
-        const block = _ensureProgressBlock(key, aid);
-        const total    = j.total_invoices;
-        const done     = j.downloaded_invoices || 0;
-        const failed   = j.failed_invoices || 0;
-        const finished = done + failed;
-        const pct      = Math.min(100, Math.round(finished / total * 100));
-
-        block.querySelector('.pb-total').textContent = total.toLocaleString('vi-VN');
-        block.querySelector('.pb-done').textContent  = done.toLocaleString('vi-VN');
-        block.querySelector('.pb-fail').textContent  = failed.toLocaleString('vi-VN');
-
-        const bar = block.querySelector('.pb-bar');
-        bar.style.width = pct + '%';
-        bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-        block.querySelector('.pb-pct').textContent = pct + '%';
-
-        const remaining = total - finished;
-        block.querySelector('.pb-label').textContent =
-          finished.toLocaleString('vi-VN') + ' / ' + total.toLocaleString('vi-VN') +
-          (remaining > 0 ? ` — còn ${remaining.toLocaleString('vi-VN')}` : ' — hoàn thành');
-
-        progCard.style.setProperty('display', 'block', 'important');
-      }
+    const cfg = data.auto_sync_config;
+    if (cfg && cfg.enabled) {
+      const ids = new Set((cfg.account_schedules || []).map(s => s.account_id));
+      ACCOUNTS.forEach(a => {
+        if (ids.has(a.id)) {
+          const running = (data.active_account_ids || []).includes(a.id);
+          applyAutoSyncForAccount(a.id, running, cfg);
+        } else if (accState[a.id].autoEnabled) {
+          applyAutoSyncForAccount(a.id, false, null);
+        }
+      });
+    } else {
+      ACCOUNTS.forEach(a => { if (accState[a.id].autoEnabled) applyAutoSyncForAccount(a.id, false, null); });
     }
-  } catch(e) {}
+  } catch (e) {}
 }, 5000);
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-if (isRunning) setRunning(true);
-setAutoSync(isAutoSync, autoSyncCfg && Object.keys(autoSyncCfg).length ? autoSyncCfg : null);
+// ── Init ───────────────────────────────────────────────────────────────────────
+(function init() {
+  const fpOpts = { locale: 'vn', dateFormat: 'Y-m-d', altInput: true, altFormat: 'd/m/Y', allowInput: true };
+  const today  = new Date();
+  const first  = new Date(today.getFullYear(), today.getMonth(), 1);
 
-(function initDatePickers() {
-  const today = new Date();
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const toIsoLocal = d =>
-    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const sd = document.getElementById('inp-start-date');
-  const ed = document.getElementById('inp-end-date');
-  if (sd && !sd.value) sd.value = toIsoLocal(firstOfMonth);
-  if (ed && !ed.value) ed.value = toIsoLocal(today);
+  ACCOUNTS.forEach(a => {
+    flatpickr('#range-start-' + a.id, fpOpts);
+    flatpickr('#range-end-'   + a.id, fpOpts);
+    flatpickr('#as-start-'    + a.id, fpOpts);
+    flatpickr('#as-end-'      + a.id, fpOpts);
 
-  const fpOpts = {
-    locale: "vn",
-    dateFormat: "Y-m-d",
-    altInput: true,
-    altFormat: "d/m/Y",
-    allowInput: true,
-    onChange: () => previewChunks(),
-  };
-  flatpickr("#inp-start-date", fpOpts);
-  flatpickr("#inp-end-date",   fpOpts);
+    $('range-start-' + a.id).value = toIso(first);
+    $('range-end-'   + a.id).value = toIso(today);
 
-  const fpOptsAuto = {
-    locale: "vn",
-    dateFormat: "Y-m-d",
-    altInput: true,
-    altFormat: "d/m/Y",
-    allowInput: true,
-    onChange: () => previewAutoSyncChunks(),
-  };
-  flatpickr("#autosync-start-date", fpOptsAuto);
-  flatpickr("#autosync-end-date",   fpOptsAuto);
+    const running = (initialStatus.active_account_ids || []).includes(a.id);
+    setRunningRow(a.id, running);
+  });
 
-  previewChunks();
-  const defaultBtn = document.querySelector('.autosync-preset[data-preset="2m"]');
-  if (defaultBtn) selectPreset(defaultBtn, '2m');
-  buildAccountScheduleInputs();
+  const cfg = initialAutoSyncCfg;
+  if (cfg && cfg.enabled) {
+    ACCOUNTS.forEach(a => {
+      const sched = (cfg.account_schedules || []).find(s => s.account_id === a.id);
+      if (!sched) return;
+      const running = (initialStatus.active_account_ids || []).includes(a.id);
+      applyAutoSyncForAccount(a.id, running, cfg);
+      $('as-time-' + a.id).value = `${String(sched.run_hour).padStart(2,'0')}:${String(sched.run_minute).padStart(2,'0')}`;
+
+      const btn = document.querySelector(`#acct-card-${a.id} .as-preset[data-preset="${cfg.preset}"]`);
+      if (btn) selectAcctPreset(a.id, btn, cfg.preset);
+      if (cfg.preset === 'custom_date') {
+        $('as-start-' + a.id).value = cfg.start_date || '';
+        $('as-end-'   + a.id).value = cfg.end_date   || '';
+      }
+    });
+  }
+
+  updateGlobalIndicator();
 })();
 </script>
-
-<style>
-.log-tab-btn {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-}
-.log-tab-btn.active {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: #fff;
-}
-</style>
 {% endblock %}

@@ -145,8 +145,10 @@
                 ('sale_pos', 'Bán ra - HĐ máy tính tiền'),
                 ('purchase_einvoice_5', 'Mua vào - Đã cấp HĐ - điện tử'),
                 ('purchase_pos_5', 'Mua vào - Đã cấp HĐ - máy tính tiền'),
-                ('purchase_einvoice_6', 'Mua vào - Cục thuế không nhận mã'),
-                ('purchase_einvoice_8', 'Mua vào - Cục thuế đã nhận có mã')
+                ('purchase_einvoice_6', 'Mua vào - Cục thuế không nhận mã - điện tử'),
+                ('purchase_pos_6', 'Mua vào - Cục thuế không nhận mã - máy tính tiền'),
+                ('purchase_einvoice_8', 'Mua vào - Cục thuế đã nhận có mã - điện tử'),
+                ('purchase_pos_8', 'Mua vào - Cục thuế đã nhận có mã - máy tính tiền')
             ] %}
             <label class="snap-col-pick-item">
               <input type="checkbox" name="invoice_category" value="{{ val }}" class="cat-chk"
@@ -188,7 +190,7 @@
         {% endif %}
         {% if search %}<span class="snap-filter-tag">🔍 {{ search }}</span>{% endif %}
         {% if invoice_category_list %}
-          {% set _cats = {'purchase_einvoice':'Mua vào','purchase_pos':'Mua POS','sale_einvoice':'Bán ra','sale_pos':'Bán POS'} %}
+          {% set _cats = {'purchase_einvoice_5': 'Mua vào - Đã cấp HĐ - điện tử', 'purchase_pos_5': 'Mua vào - Đã cấp HĐ - máy tính tiền', 'purchase_einvoice_6': 'Mua vào - Cục thuế không nhận mã - điện tử', 'purchase_pos_6': 'Mua vào - Cục thuế không nhận mã - máy tính tiền', 'purchase_einvoice_8': 'Mua vào - Cục thuế đã nhận có mã - điện tử', 'purchase_pos_8': 'Mua vào - Cục thuế đã nhận có mã - máy tính tiền', 'sale_einvoice': 'Bán ra - HĐ điện tử', 'sale_pos': 'Bán ra - HĐ máy tính tiền'} %}
           {% for _cv in invoice_category_list %}
           <span class="snap-filter-tag">📋 {{ _cats.get(_cv, _cv) }}</span>
           {% endfor %}
@@ -254,10 +256,14 @@
             <td data-col="invoice_category">
               <span class="snap-tag {% if inv.invoice_category and inv.invoice_category.startswith('sale_') %}tag-sale{% else %}tag-purchase{% endif %}">
                 {% if inv.invoice_category %}
-                  {% if inv.invoice_category == 'purchase_einvoice' %}Mua vào
-                  {% elif inv.invoice_category == 'purchase_pos'    %}Mua POS
-                  {% elif inv.invoice_category == 'sale_einvoice'   %}Bán ra
-                  {% elif inv.invoice_category == 'sale_pos'        %}Bán POS
+                  {% if inv.invoice_category == 'purchase_einvoice_5' %}Mua vào - Đã cấp HĐ - điện tử
+                  {% elif inv.invoice_category == 'purchase_pos_5'    %}Mua vào - Đã cấp HĐ - máy tính tiền
+                  {% elif inv.invoice_category == 'purchase_einvoice_6' %}Mua vào - Cục thuế không nhận mã - điện tử
+                  {% elif inv.invoice_category == 'purchase_pos_6' %}Mua vào - Cục thuế không nhận mã - máy tính tiền
+                  {% elif inv.invoice_category == 'purchase_einvoice_8' %}Mua vào - Cục thuế đã nhận có mã - điện tử
+                  {% elif inv.invoice_category == 'purchase_pos_8' %}Mua vào - Cục thuế đã nhận có mã - máy tính tiền
+                  {% elif inv.invoice_category == 'sale_einvoice'   %}Bán ra - HĐ điện tử
+                  {% elif inv.invoice_category == 'sale_pos'        %}Bán ra - HĐ máy tính tiền
                   {% else %}{{ inv.invoice_category }}{% endif %}
                 {% else %}—{% endif %}
               </span>
@@ -384,8 +390,10 @@ const CAT_LABELS = {
   sale_pos:             'Bán ra - HĐ máy tính tiền',
   purchase_einvoice_5:  'Mua vào - Đã cấp HĐ - điện tử',
   purchase_pos_5:       'Mua vào - Đã cấp HĐ - máy tính tiền',
-  purchase_einvoice_6:  'Mua vào - Cục thuế không nhận mã',
-  purchase_einvoice_8:  'Mua vào - Cục thuế đã nhận có mã'
+  purchase_einvoice_6:  'Mua vào - Cục thuế không nhận mã - điện tử',
+  purchase_pos_6:       'Mua vào - Cục thuế không nhận mã - máy tính tiền',
+  purchase_einvoice_8:  'Mua vào - Cục thuế đã nhận có mã - điện tử',
+  purchase_pos_8:       'Mua vào - Cục thuế đã nhận có mã - máy tính tiền'
 };
 
 function getCheckedCats() {

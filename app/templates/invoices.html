@@ -7,9 +7,61 @@
 <div class="card mb-3">
   <div class="card-body p-3">
     <form method="get" action="{{ url_for('invoices.index') }}" id="filter-form">
+      {% if batch_id %}<input type="hidden" name="batch_id" value="{{ batch_id }}">{% endif %}
       <div class="row g-2 align-items-end">
 
-        <div class="col-md-3">
+        <div class="col-md-2">
+          <label class="form-label">Công ty</label>
+          <select name="account_id" class="form-select" onchange="this.form.submit()">
+            <option value="">Tất cả tài khoản</option>
+            {% for a in accounts %}
+            <option value="{{ a.id }}" {% if account_id == a.id|string %}selected{% endif %}>{{ a.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label">Lô hóa đơn</label>
+          <!-- Dropdown chọn batch: "Hóa đơn mới" hoặc một batch đã chốt -->
+          <div class="dropdown batch-picker-wrap">
+            <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start"
+                    id="btn-batch-picker" data-bs-toggle="dropdown" aria-expanded="false">
+              <span id="batch-picker-label">
+                {% if active_batch %}📦 {{ active_batch.label }}{% else %}✦ Hóa đơn mới ({{ new_count }}){% endif %}
+              </span>
+            </button>
+            <div class="dropdown-menu p-1" id="batch-picker-menu" style="min-width:240px; max-height:340px; overflow-y:auto; font-size:12px;">
+              <a class="dropdown-item d-flex align-items-center gap-2 py-2 px-2 {% if not active_batch %}active-batch-item{% endif %}"
+                 style="border-radius:6px;"
+                 href="{{ url_for('invoices.index', account_id=account_id or none, search=search or none) }}">
+                <span>✦</span>
+                <div class="flex-grow-1">
+                  <div style="font-weight:600;">Hóa đơn mới</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Chưa chốt · {{ new_count }} HĐ</div>
+                </div>
+              </a>
+              <div class="dropdown-divider my-1"></div>
+              {% for b in batches %}
+              <a class="dropdown-item d-flex align-items-center gap-2 py-2 px-2 {% if active_batch and active_batch.id == b.id %}active-batch-item{% endif %}"
+                 style="border-radius:6px;"
+                 href="{{ url_for('invoices.index', account_id=account_id or none, batch_id=b.id) }}">
+                <span>📦</span>
+                <div class="flex-grow-1">
+                  <div style="font-weight:600;">{{ b.label }}</div>
+                  <div style="font-size:10px; color:var(--text-muted);">
+                    {{ b.invoice_count }} HĐ
+                    {% if b.account %}· {{ b.account.name }}{% endif %}
+                  </div>
+                </div>
+              </a>
+              {% else %}
+              <div class="px-2 py-2" style="font-size:11px; color:var(--text-muted);">Chưa có batch nào</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-2">
           <label class="form-label">Tìm kiếm</label>
           <input type="text" name="search" class="form-control"
                  placeholder="Số HĐ, tên người bán/mua, MST…"
@@ -18,15 +70,8 @@
 
         <div class="col-md-2">
           <label class="form-label">Loại hóa đơn</label>
-          <select name="account_id" class="form-select">
-            <option value="">Tất cả tài khoản</option>
-            {% for a in accounts %}
-            <option value="{{ a.id }}" {% if account_id == a.id|string %}selected{% endif %}>{{ a.name }}</option>
-            {% endfor %}
-          </select>
-
           <!-- Multi-select dropdown: Loại hóa đơn -->
-          <div class="dropdown cat-picker-wrap mt-1">
+          <div class="dropdown cat-picker-wrap">
             <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start"
                     id="btn-cat-picker" data-bs-toggle="dropdown" data-bs-auto-close="outside"
                     aria-expanded="false">
@@ -59,23 +104,17 @@
           </div>
         </div>
 
-        <div class="col-md-2">
+        {% if not active_batch %}
+        <div class="col-md-1">
           <label class="form-label">Từ ngày</label>
-          <input type="text"
-                id="start_date"
-                name="start_date"
-                class="form-control"
-                value="{{ start_date }}" />
+          <input type="text" id="start_date" name="start_date" class="form-control" value="{{ start_date }}" />
         </div>
 
-        <div class="col-md-2">
+        <div class="col-md-1">
           <label class="form-label">Đến ngày</label>
-          <input type="text"
-                id="end_date"
-                name="end_date"
-                class="form-control"
-                value="{{ end_date }}" />
+          <input type="text" id="end_date" name="end_date" class="form-control" value="{{ end_date }}" />
         </div>
+        {% endif %}
 
         <div class="col-md-1">
           <label class="form-label">Ghi chú</label>
@@ -93,7 +132,7 @@
           <button type="submit" class="btn btn-brand flex-grow-1">
             <i class="bi bi-search"></i> Lọc
           </button>
-          <a href="{{ url_for('invoices.index') }}" class="btn btn-outline-secondary" title="Xóa bộ lọc">
+          <a href="{{ url_for('invoices.index', batch_id=batch_id or none) }}" class="btn btn-outline-secondary" title="Xóa bộ lọc">
             <i class="bi bi-x-lg"></i>
           </a>
         </div>
@@ -122,8 +161,18 @@
   </div>
 </div>
 
-<!-- ── Export status ──────────────────────────────────── -->
+<!-- ── Export / batch status ─────────────────────────────── -->
 <div id="export-status" class="mb-3" style="display:none;"></div>
+
+<!-- ── Select bar (chỉ hiện khi đang xem "Hóa đơn mới") ────── -->
+{% if not active_batch %}
+<div class="d-flex align-items-center gap-3 mb-2 px-2 py-2" style="background:var(--card-hover,#f9fafb); border-radius:8px; font-size:12px;">
+  <label class="d-flex align-items-center gap-2" style="cursor:pointer; margin:0;">
+    <input type="checkbox" id="chk-all" onchange="toggleAll(this)"> Chọn tất cả trang này
+  </label>
+  <span id="selected-info" style="color:var(--brand); font-weight:600;">0 HĐ đã chọn</span>
+</div>
+{% endif %}
 
 <!-- ── Quick-edit modal ───────────────────────────────── -->
 <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
@@ -180,11 +229,47 @@
   </div>
 </div>
 
+<!-- ── Modal chốt batch ─────────────────────────────────── -->
+<div class="modal fade" id="chotModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-archive"></i> Chốt batch hóa đơn</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3" style="font-size:13px; color:var(--text-secondary);">
+          <span id="modal-count-desc">0 hóa đơn</span> sẽ được đánh dấu là <strong>đã chốt</strong>.
+          Nếu đã có batch của tháng này, hóa đơn sẽ được <strong>gộp vào batch cũ</strong>.
+        </p>
+        <label class="form-label fw-semibold">Chọn tháng <span class="text-danger">*</span></label>
+        <select class="form-select mb-2" id="sel-batch-month" onchange="onMonthChange()">
+          <option value="">— Chọn tháng —</option>
+        </select>
+        <div id="existing-batch-info" class="alert d-flex align-items-start gap-2 py-2 px-3"
+             style="display:none; background:var(--warning-bg,#fffbeb); border:1px solid var(--warning-border,#fde68a); color:#92400e; font-size:12px;">
+          <i class="bi bi-info-circle mt-1"></i>
+          <span>Đã có batch: <strong id="existing-batch-name"></strong>
+          (<span id="existing-batch-count"></span> HĐ) — hóa đơn sẽ được gộp vào batch này.</span>
+        </div>
+        <label class="form-label fw-semibold mt-2">Ghi chú (tuỳ chọn)</label>
+        <input class="form-control" type="text" id="inp-batch-note" placeholder="Ghi chú thêm nếu cần">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Huỷ</button>
+        <button type="button" class="btn btn-brand" id="btn-confirm-chot" onclick="confirmChot()" disabled>
+          Xác nhận chốt
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Table ──────────────────────────────────────────── -->
 <div class="card">
   <div class="card-header d-flex align-items-center gap-2">
     <i class="bi bi-receipt"></i>
-    Hóa đơn
+    {% if active_batch %}📦 {{ active_batch.label }}{% else %}Hóa đơn mới{% endif %}
     <span class="badge" style="background:var(--brand-dim); color:var(--brand); border:1px solid var(--brand-border); font-size:11px; padding:3px 9px; border-radius:20px;">
       {{ pagination.total }} tổng
     </span>
@@ -204,19 +289,53 @@
           <div class="dropdown-divider mt-0 mb-1"></div>
         </div>
       </div>
-      <button class="btn btn-sm btn-outline-secondary" id="btn-export" onclick="exportExcel()">
-        <i class="bi bi-file-earmark-spreadsheet" style="color:var(--success);"></i> Xuất Excel
-      </button>
+
+      {% if not active_batch %}
+        <!-- Xem "Hóa đơn mới": nút chốt batch + export -->
+        <button class="btn btn-sm btn-brand" id="btn-chot" disabled onclick="openChotModal()">
+          <i class="bi bi-archive"></i> Chốt batch đã chọn
+          <span id="btn-chot-count" class="badge bg-light text-dark ms-1">0</span>
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" id="btn-export" onclick="exportNew()">
+          <i class="bi bi-file-earmark-spreadsheet" style="color:var(--success);"></i> Xuất Excel
+        </button>
+      {% else %}
+        <!-- Xem batch đã chốt: export riêng cho batch + xóa batch -->
+        <button class="btn btn-sm btn-outline-secondary" id="btn-export" onclick="exportBatch({{ active_batch.id }})">
+          <i class="bi bi-file-earmark-spreadsheet" style="color:var(--success);"></i> Xuất Excel
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteBatch({{ active_batch.id }}, '{{ active_batch.label|e }}')">
+          <i class="bi bi-trash"></i> Xoá batch
+        </button>
+      {% endif %}
+
+      <!-- Export theo năm -->
+      <div class="dropdown" id="year-export-wrap" style="display:none;">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+          <i class="bi bi-calendar3"></i> Xuất theo năm
+        </button>
+        <div class="dropdown-menu p-2" style="min-width:200px;">
+          <select class="form-select form-select-sm mb-2" id="sel-export-year">
+            <option value="">— Chọn năm —</option>
+          </select>
+          <button class="btn btn-sm btn-brand w-100" id="btn-export-year" onclick="exportYear()" disabled>
+            ⬇ Xuất theo năm
+          </button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="card-body p-0" style="overflow-x:auto;">
     <table class="table table-hover mb-0" style="font-size:10px; min-width:2800px; table-layout:fixed;" id="inv-table">
       <thead>
         <tr>
+          {% if not active_batch %}<th data-col="_chk" class="cw-chk"></th>{% endif %}
           <th data-col="invoice_no" class="cw-no" style="white-space:nowrap;">Số HĐ</th>
           <th data-col="invoice_symbol" class="cw-sym">Ký hiệu</th>
           <th data-col="invoice_form" class="cw-form">Mẫu số</th>
+          <th data-col="invoice_category" class="cw-type" style="white-space:nowrap;">Loại crawl</th>
           <th data-col="issue_date" class="cw-date" style="white-space:nowrap;">Ngày lập</th>
+          <th data-col="account_name" class="cw-type">Công ty</th>
           <th data-col="status" class="cw-status">Trạng thái</th>
           <th data-col="invoice_type" class="cw-type" style="white-space:nowrap;">Loại HĐ</th>
           <th data-col="payment_method" class="cw-pay" style="white-space:nowrap;">Thanh toán</th>
@@ -241,19 +360,32 @@
           <th data-col="so_hop_dong" class="cw-shd" style="white-space:nowrap;">Số HĐ</th>
           <th data-col="ngay_hop_dong" class="cw-date" style="white-space:nowrap;">Ngày HĐ</th>
           <th data-col="hd_ban_ra_tuong_ung" class="cw-hdbanra" style="white-space:nowrap;">HĐ bán ra</th>
+          <th data-col="created_at" class="cw-date" style="white-space:nowrap;">Crawl lúc</th>
           <th data-col="_actions" class="cw-actions"></th>
         </tr>
       </thead>
       <tbody>
         {% for inv in pagination.items %}
         <tr id="row-{{ inv.id }}">
+          {% if not active_batch %}
+          <td data-col="_chk" class="cw-chk">
+            <input type="checkbox" class="row-chk" value="{{ inv.id }}" onchange="onRowCheck(this)">
+          </td>
+          {% endif %}
           {# ── Thông tin hóa đơn ── #}
-          <td data-col="invoice_no" class="cw-no" style="white-space:nowrap;"><a href="{{ url_for('invoices.detail', invoice_id=inv.id) }}" style="font-family:var(--font-mono); text-decoration:none; color:var(--brand);">{{ inv.invoice_no }}</a></td>
+          <td data-col="invoice_no" class="cw-no" style="white-space:nowrap;"><a href="{{ url_for('invoices.detail', invoice_id=inv.id) }}" target="_blank" style="font-family:var(--font-mono); text-decoration:none; color:var(--brand);">{{ inv.invoice_no }}</a></td>
           <td data-col="invoice_symbol" class="cw-sym" style="color:var(--text-secondary);">{{ inv.invoice_symbol or '—' }}</td>
           <td data-col="invoice_form" class="cw-form" style="color:var(--text-secondary);">{{ inv.invoice_form or '—' }}</td>
+          <td data-col="invoice_category" class="cw-type" style="font-size:11px; white-space:nowrap;">
+            {% set _cat_labels2 = {'sale_einvoice': 'Bán ra - điện tử', 'sale_pos': 'Bán ra - máy tính tiền', 'purchase_einvoice_5': 'Mua vào - Đã cấp HĐ - điện tử', 'purchase_pos_5': 'Mua vào - Đã cấp HĐ - máy tính tiền', 'purchase_einvoice_6': 'Mua vào - Cục thuế không nhận mã - điện tử', 'purchase_pos_6': 'Mua vào - Cục thuế không nhận mã - máy tính tiền', 'purchase_einvoice_8': 'Mua vào - Cục thuế đã nhận có mã - điện tử', 'purchase_pos_8': 'Mua vào - Cục thuế đã nhận có mã - máy tính tiền'} %}
+            <span class="badge" style="background:{% if inv.invoice_category and inv.invoice_category.startswith('sale_') %}var(--success-bg);color:var(--success){% else %}var(--brand-dim);color:var(--brand){% endif %}; font-size:9px;">
+              {{ _cat_labels2.get(inv.invoice_category, inv.invoice_category or '—') }}
+            </span>
+          </td>
           <td data-col="issue_date" class="cw-date" style="font-family:var(--font-mono); color:var(--text-secondary);">
             {{ inv.issue_date.strftime('%d/%m/%Y') if inv.issue_date else '—' }}
           </td>
+          <td data-col="account_name" class="cw-type" style="font-size:11px; color:var(--brand);">{{ inv.account.name if inv.account else '—' }}</td>
           <td data-col="status" class="cw-status">
             {% if inv.status %}
             <span class="badge" style="background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); font-size:9px; white-space:nowrap;">{{ inv.status[:18] }}</span>
@@ -319,6 +451,7 @@
           <td data-col="so_hop_dong" class="cw-shd" title="{{ inv.so_hop_dong or '' }}">{{ inv.so_hop_dong or '—' }}</td>
           <td data-col="ngay_hop_dong" class="cw-date" style="white-space:nowrap; font-size:11px;">{{ inv.ngay_hop_dong or '—' }}</td>
           <td data-col="hd_ban_ra_tuong_ung" class="cw-hdbanra" title="{{ inv.hd_ban_ra_tuong_ung or '' }}">{{ inv.hd_ban_ra_tuong_ung or '—' }}</td>
+          <td data-col="created_at" class="cw-date" style="white-space:nowrap; font-size:10px; color:var(--text-muted);">{{ inv.created_at.strftime('%d/%m %H:%M') if inv.created_at else '—' }}</td>
           {# ── Actions ── #}
           <td data-col="_actions" class="d-flex gap-1" style="white-space:nowrap;">
             <button class="btn btn-sm btn-outline-secondary" title="Chỉnh sửa thông tin bổ sung"
@@ -326,16 +459,16 @@
               onclick="openEdit(this)">
               <i class="bi bi-pencil"></i>
             </button>
-            <a href="{{ url_for('invoices.detail', invoice_id=inv.id) }}" class="btn btn-sm btn-outline-secondary" title="Xem chi tiết">
+            <a href="{{ url_for('invoices.detail', invoice_id=inv.id) }}" class="btn btn-sm btn-outline-secondary" title="Xem chi tiết" target="_blank">
               <i class="bi bi-eye"></i>
             </a>
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="29" class="text-center py-5" style="color:var(--text-muted);">
+          <td colspan="31" class="text-center py-5" style="color:var(--text-muted);">
             <i class="bi bi-inbox" style="font-size:32px; display:block; margin-bottom:8px; opacity:.35;"></i>
-            Không tìm thấy hóa đơn. Hãy bắt đầu crawl để tải hóa đơn.
+            Không tìm thấy hóa đơn.
           </td>
         </tr>
         {% endfor %}
@@ -356,6 +489,9 @@
 
 {% block scripts %}
 <script>
+const ACTIVE_BATCH_ID = {{ active_batch.id if active_batch else 'null' }};
+const ACCOUNT_ID      = {{ account_id|tojson if account_id else 'null' }};
+
 // ── Category multi-select picker ──────────────────────────────────────────
 const CAT_LABELS = {
   sale_einvoice:        'Bán ra - HĐ điện tử',
@@ -389,32 +525,29 @@ function catPickerAll(checked) {
 
 // ── Column definitions (key → label, group, default visible) ─────────────────
 const COL_DEFS = [
-  // Thông tin hóa đơn
+  { key: '_chk',                label: '',                    group: '',                    locked: true },
   { key: 'invoice_no',          label: 'Số hóa đơn',        group: 'Thông tin hóa đơn',  locked: true },
   { key: 'invoice_symbol',      label: 'Ký hiệu',            group: 'Thông tin hóa đơn',  def: true  },
   { key: 'invoice_form',        label: 'Mẫu số',             group: 'Thông tin hóa đơn',  def: false },
+  { key: 'invoice_category',    label: 'Loại crawl',         group: 'Thông tin hóa đơn',  def: true  },
   { key: 'issue_date',          label: 'Ngày lập',           group: 'Thông tin hóa đơn',  def: true  },
+  { key: 'account_name',        label: 'Công ty',            group: 'Thông tin hóa đơn',  def: true  },
   { key: 'status',              label: 'Trạng thái',         group: 'Thông tin hóa đơn',  def: true  },
   { key: 'invoice_type',        label: 'Loại hóa đơn',       group: 'Thông tin hóa đơn',  def: false },
   { key: 'payment_method',      label: 'Thanh toán',         group: 'Thông tin hóa đơn',  def: false },
-  // Người bán
   { key: 'seller_name',         label: 'Tên người bán',      group: 'Người bán',           def: true  },
   { key: 'seller_tax_code',     label: 'MST bán',            group: 'Người bán',           def: true  },
   { key: 'seller_phone',        label: 'Điện thoại bán',     group: 'Người bán',           def: false },
   { key: 'seller_email',        label: 'Email bán',          group: 'Người bán',           def: false },
   { key: 'seller_bank',         label: 'Số TK bán',          group: 'Người bán',           def: false },
   { key: 'seller_bank_name',    label: 'Ngân hàng bán',      group: 'Người bán',           def: false },
-  // Người mua
   { key: 'buyer_name',          label: 'Tên người mua',      group: 'Người mua',           def: true  },
   { key: 'buyer_tax_code',      label: 'MST mua',            group: 'Người mua',           def: true  },
-  // Số tiền
   { key: 'amount',              label: 'Tiền hàng',          group: 'Số tiền',             def: true  },
   { key: 'vat_rate',            label: 'Thuế suất',          group: 'Số tiền',             def: true  },
   { key: 'vat_amount',          label: 'Thuế GTGT',          group: 'Số tiền',             def: true  },
   { key: 'total_amount',        label: 'Tổng tiền',          group: 'Số tiền',             def: true  },
-  // Mặt hàng
   { key: 'mat_hang',            label: 'Mặt hàng',           group: 'Mặt hàng',            def: true  },
-  // Thông tin bổ sung
   { key: 'thang_ke_khai',       label: 'Tháng kê khai',      group: 'Thông tin bổ sung',   def: true  },
   { key: 'ghi_chu',             label: 'Ghi chú / Loại',     group: 'Thông tin bổ sung',   def: true  },
   { key: 'ma_cong_trinh',       label: 'Mã công trình',      group: 'Thông tin bổ sung',   def: false },
@@ -423,18 +556,17 @@ const COL_DEFS = [
   { key: 'so_hop_dong',         label: 'Số hợp đồng',        group: 'Thông tin bổ sung',   def: false },
   { key: 'ngay_hop_dong',       label: 'Ngày hợp đồng',      group: 'Thông tin bổ sung',   def: false },
   { key: 'hd_ban_ra_tuong_ung', label: 'HĐ bán ra',          group: 'Thông tin bổ sung',   def: false },
-  // locked actions
+  { key: 'created_at',          label: 'Crawl lúc',          group: 'Thông tin bổ sung',   def: false },
   { key: '_actions',            label: '',                   group: '',                    locked: true },
 ];
 
-const LS_KEY = 'gdt_inv_cols_v1';
+const LS_KEY = 'gdt_inv_cols_v2';
 
 function loadVisibleCols() {
   try {
     const saved = localStorage.getItem(LS_KEY);
     if (saved) return new Set(JSON.parse(saved));
   } catch(e) {}
-  // defaults
   return new Set(COL_DEFS.filter(c => c.locked || c.def).map(c => c.key));
 }
 
@@ -458,7 +590,6 @@ function applyColVisibility() {
 
 function buildColPicker() {
   const menu = document.getElementById('col-picker-menu');
-  // Remove existing items (keep header div + divider)
   const existingItems = menu.querySelectorAll('.col-pick-item, .col-pick-group');
   existingItems.forEach(el => el.remove());
 
@@ -503,30 +634,185 @@ function colPickerAll(checked) {
   applyColVisibility();
 }
 
-// Init on load
-document.addEventListener('DOMContentLoaded', () => {
-  buildColPicker();
-  applyColVisibility();
-  updateCatPickerLabel();
+// ── Row selection (chỉ áp dụng khi xem "Hóa đơn mới") ─────────────────────
+const selectedIds = new Set();
 
-  if (document.getElementById('start_date')) {
-    flatpickr("#start_date", {
-        locale: "vn",
-        dateFormat: "Y-m-d",
-        altInput: true,
-        altFormat: "d/m/Y",
-        allowInput: true
-    });
+function onRowCheck(chk) {
+  const id = parseInt(chk.value);
+  if (chk.checked) selectedIds.add(id);
+  else             selectedIds.delete(id);
+  updateSelectBar();
+}
 
-    flatpickr("#end_date", {
-        locale: "vn",
-        dateFormat: "Y-m-d",
-        altInput: true,
-        altFormat: "d/m/Y",
-        allowInput: true
-    });
+function toggleAll(masterChk) {
+  document.querySelectorAll('.row-chk').forEach(chk => {
+    chk.checked = masterChk.checked;
+    const id = parseInt(chk.value);
+    if (masterChk.checked) selectedIds.add(id);
+    else                   selectedIds.delete(id);
+  });
+  updateSelectBar();
+}
+
+function updateSelectBar() {
+  const n = selectedIds.size;
+  const infoEl  = document.getElementById('selected-info');
+  const btnChot = document.getElementById('btn-chot');
+  const countEl = document.getElementById('btn-chot-count');
+  if (infoEl)  infoEl.textContent  = `${n} HĐ đã chọn`;
+  if (countEl) countEl.textContent = n;
+  if (btnChot) btnChot.disabled    = n === 0;
+}
+
+// ── Modal chốt batch ──────────────────────────────────────────────────────
+const existingBatches = {};
+{% for b in batches %}
+existingBatches["{{ b.label|e }}"] = { id: {{ b.id }}, label: "{{ b.label|e }}", invoice_count: {{ b.invoice_count }} };
+{% endfor %}
+
+function _buildMonthOptions() {
+  const sel  = document.getElementById('sel-batch-month');
+  const now  = new Date();
+  const opts = ['<option value="">— Chọn tháng —</option>'];
+  for (let i = 0; i < 240; i++) {
+    const d     = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = `Tháng ${d.getMonth() + 1}/${d.getFullYear()}`;
+    opts.push(`<option value="${label}">${label}</option>`);
   }
+  sel.innerHTML = opts.join('');
+}
+
+function onMonthChange() {
+  const sel   = document.getElementById('sel-batch-month');
+  const label = sel.value;
+  const btn   = document.getElementById('btn-confirm-chot');
+  const info  = document.getElementById('existing-batch-info');
+  if (!label) { btn.disabled = true; info.style.display = 'none'; return; }
+  btn.disabled = false;
+  const existing = existingBatches[label];
+  if (existing) {
+    document.getElementById('existing-batch-name').textContent  = existing.label;
+    document.getElementById('existing-batch-count').textContent = existing.invoice_count + ' HĐ';
+    info.style.display = 'block';
+    btn.textContent = 'Gộp vào batch này';
+  } else {
+    info.style.display = 'none';
+    btn.textContent = 'Xác nhận chốt';
+  }
+}
+
+function openChotModal() {
+  if (selectedIds.size === 0) return;
+  if (!ACCOUNT_ID) {
+    showExportAlert('Vui lòng chọn công ty trước khi chốt batch.', 'err');
+    return;
+  }
+  document.getElementById('modal-count-desc').textContent = `${selectedIds.size} hóa đơn`;
+  document.getElementById('inp-batch-note').value = '';
+  document.getElementById('existing-batch-info').style.display = 'none';
+  document.getElementById('btn-confirm-chot').disabled = true;
+  document.getElementById('btn-confirm-chot').textContent = 'Xác nhận chốt';
+  _buildMonthOptions();
+  document.getElementById('sel-batch-month').value = '';
+  new bootstrap.Modal(document.getElementById('chotModal')).show();
+}
+
+async function confirmChot() {
+  const label = document.getElementById('sel-batch-month').value.trim();
+  const note  = document.getElementById('inp-batch-note').value.trim();
+  if (!label) return;
+  const btn = document.getElementById('btn-confirm-chot');
+  btn.disabled = true;
+  const origText = btn.textContent;
+  btn.textContent = 'Đang xử lý…';
+  try {
+    const res  = await fetch('/invoices/api/batch/merge-or-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label, note, invoice_ids: [...selectedIds], account_id: ACCOUNT_ID }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const action = data.merged ? 'Gộp vào' : 'Tạo';
+      showExportAlert(`✓ ${action} batch "${data.batch.label}" — ${data.batch.invoice_count} HĐ`, 'ok');
+      bootstrap.Modal.getInstance(document.getElementById('chotModal')).hide();
+      setTimeout(() => location.reload(), 900);
+    } else {
+      showExportAlert(`Lỗi: ${data.error}`, 'err');
+    }
+  } catch (e) {
+    showExportAlert(`Lỗi kết nối: ${e}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+async function deleteBatch(id, label) {
+  if (!confirm(`Xoá batch "${label}"?\nCác hóa đơn sẽ trở về trạng thái "mới".`)) return;
+  const res  = await fetch(`/invoices/api/batch/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.ok) {
+    showExportAlert(`Đã xoá batch — ${data.released} HĐ được giải phóng`, 'ok');
+    setTimeout(() => location.href = '/invoices/', 800);
+  } else {
+    showExportAlert(`Lỗi: ${data.error}`, 'err');
+  }
+}
+
+// ── Export theo năm ─────────────────────────────────────────────
+async function loadExportYears() {
+  const wrap = document.getElementById('year-export-wrap');
+  const sel  = document.getElementById('sel-export-year');
+  const btn  = document.getElementById('btn-export-year');
+  if (!ACCOUNT_ID) { wrap.style.display = 'none'; return; }
+
+  try {
+    const res  = await fetch(`/invoices/api/batch/years?account_id=${ACCOUNT_ID}`);
+    const data = await res.json();
+    if (!data.ok || !data.years || data.years.length === 0) { wrap.style.display = 'none'; return; }
+    sel.innerHTML = '<option value="">— Chọn năm —</option>' +
+      data.years.map(y => `<option value="${y}">Năm ${y}</option>`).join('');
+    wrap.style.display = 'inline-block';
+    btn.disabled = true;
+  } catch (e) {
+    wrap.style.display = 'none';
+  }
+}
+
+document.getElementById('sel-export-year')?.addEventListener('change', function () {
+  document.getElementById('btn-export-year').disabled = !this.value;
 });
+
+async function exportYear() {
+  const year = parseInt(document.getElementById('sel-export-year').value);
+  if (!ACCOUNT_ID) { showExportAlert('Vui lòng chọn công ty trước khi xuất theo năm.', 'err'); return; }
+  if (!year) { showExportAlert('Vui lòng chọn năm.', 'err'); return; }
+
+  const btn = document.getElementById('btn-export-year');
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Đang xuất…';
+  try {
+    const res  = await fetch('/invoices/api/export/year', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year, account_id: ACCOUNT_ID }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showExportAlert(`✓ Đã xuất bảng kê năm ${year}`, 'ok');
+      window.location.href = `/invoices/download/${data.file}`;
+    } else {
+      showExportAlert(`Lỗi: ${data.error}`, 'err');
+    }
+  } catch (e) {
+    showExportAlert(`Lỗi kết nối: ${e}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
 
 // ── Edit modal ───────────────────────────────────────────────────────────────
 function openEdit(btn) {
@@ -578,67 +864,89 @@ async function saveEdit() {
 }
 
 // ── Excel export ─────────────────────────────────────────────────────────────
-async function exportExcel() {
-  const btn      = document.getElementById('btn-export');
+function showExportAlert(msg, type) {
   const statusEl = document.getElementById('export-status');
-  const params   = new URLSearchParams(window.location.search);
+  const styles = type === 'ok'
+    ? 'background:var(--success-bg); border:1px solid var(--success-border); color:var(--success);'
+    : 'background:var(--danger-bg); border:1px solid var(--danger-border); color:var(--danger);';
+  statusEl.style.display = 'block';
+  statusEl.innerHTML = `<div class="alert d-flex align-items-center gap-2" style="${styles}">
+      <i class="bi ${type === 'ok' ? 'bi-check-circle-fill' : 'bi-x-circle'}"></i>
+      <div class="flex-grow-1">${msg}</div>
+      <button type="button" class="btn-close ms-auto" onclick="this.closest('.alert').remove()"></button>
+    </div>`;
+}
 
-  if (!params.get('account_id')) {
-    statusEl.style.display = 'block';
-    statusEl.innerHTML = `
-      <div class="alert d-flex align-items-center gap-2"
-           style="background:var(--warning-bg,#fffbeb); border:1px solid var(--warning-border,#fde68a); color:#92400e;">
-        <i class="bi bi-exclamation-triangle-fill"></i>
-        Vui lòng chọn <strong>tài khoản công ty</strong> trước khi xuất Excel.
-      </div>`;
+async function exportNew() {
+  if (!ACCOUNT_ID) {
+    showExportAlert('Vui lòng chọn <strong>tài khoản công ty</strong> trước khi xuất Excel.', 'err');
     return;
   }
-
+  const btn = document.getElementById('btn-export');
   btn.disabled = true;
+  const orig = btn.innerHTML;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Đang tạo…';
-  statusEl.style.display = 'none';
+  document.getElementById('export-status').style.display = 'none';
 
+  const params = new URLSearchParams(window.location.search);
   try {
-    const res = await fetch('/export/api/excel', {
+    const res = await fetch('/invoices/api/export/new', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         start_date:        params.get('start_date')       || null,
         end_date:           params.get('end_date')         || null,
         search:             params.get('search')           || null,
-        ghi_chu:            params.get('ghi_chu')          || null,
-        thang_ke_khai:      params.get('thang_ke_khai')    || null,
         invoice_category:   params.getAll('invoice_category') || [],
-        account_id:         params.get('account_id') ? parseInt(params.get('account_id')) : null,
+        account_id:         ACCOUNT_ID,
       }),
     });
     const data = await res.json();
     if (data.ok) {
-      statusEl.style.display = 'block';
-      statusEl.innerHTML = `
-        <div class="alert d-flex align-items-center gap-3" style="background:var(--success-bg); border:1px solid var(--success-border); color:var(--success);">
-          <i class="bi bi-check-circle-fill fs-5"></i>
-          <div>
-            Đã tạo báo cáo: <strong>${data.file}</strong>
-            <div class="mt-1">
-              <a href="/export/download/${data.file}" class="btn btn-sm btn-brand">
-                <i class="bi bi-download"></i> Tải xuống
-              </a>
-            </div>
-          </div>
-          <button type="button" class="btn-close ms-auto" onclick="this.closest('.alert').remove()"></button>
-        </div>`;
+      showExportAlert(`Đã tạo báo cáo: <strong>${data.file}</strong> — <a href="/invoices/download/${data.file}" class="btn btn-sm btn-brand ms-2"><i class="bi bi-download"></i> Tải xuống</a>`, 'ok');
     } else {
-      statusEl.style.display = 'block';
-      statusEl.innerHTML = `<div class="alert" style="background:var(--danger-bg); border:1px solid var(--danger-border); color:var(--danger);"><i class="bi bi-x-circle"></i> ${data.error}</div>`;
+      showExportAlert(data.error, 'err');
     }
   } catch(e) {
-    statusEl.style.display = 'block';
-    statusEl.innerHTML = `<div class="alert alert-danger">Request failed: ${e}</div>`;
+    showExportAlert(`Request failed: ${e}`, 'err');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-file-earmark-spreadsheet" style="color:var(--success);"></i> Xuất Excel';
+    btn.innerHTML = orig;
   }
 }
+
+async function exportBatch(id) {
+  const btn = document.getElementById('btn-export');
+  btn.disabled = true;
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Đang tạo…';
+  try {
+    const res  = await fetch(`/invoices/api/export/batch/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      showExportAlert(`Đã tạo báo cáo: <strong>${data.file}</strong> — <a href="/invoices/download/${data.file}" class="btn btn-sm btn-brand ms-2"><i class="bi bi-download"></i> Tải xuống</a>`, 'ok');
+    } else {
+      showExportAlert(data.error, 'err');
+    }
+  } catch (e) {
+    showExportAlert(`Request failed: ${e}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+// ── Init on load ────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  buildColPicker();
+  applyColVisibility();
+  updateCatPickerLabel();
+  loadExportYears();
+
+  if (document.getElementById('start_date')) {
+    flatpickr("#start_date", { locale: "vn", dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+    flatpickr("#end_date",   { locale: "vn", dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+  }
+});
 </script>
 {% endblock %}

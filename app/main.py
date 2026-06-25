@@ -65,14 +65,12 @@ def create_app() -> Flask:
     from app.routes.invoices import bp as invoices_bp
     from app.routes.export import bp as export_bp
     from app.routes.settings import bp as settings_bp
-    from app.routes.snapshot import bp as snapshot_bp
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(crawler_bp)
     app.register_blueprint(invoices_bp)
     app.register_blueprint(export_bp)
     app.register_blueprint(settings_bp)
-    app.register_blueprint(snapshot_bp)
 
     # Database tables
     init_db(app)

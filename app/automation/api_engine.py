@@ -551,7 +551,7 @@ def build_fallback_html(
 
     day, month, year = _parse_issue_date(detail_json.get("tdlap"))
 
-    thdon         = detail_json.get("thdon") or "HÓA ĐƠN"
+    thdon         = detail_json.get("thdon") or detail_json.get("tlhdon") or "HÓA ĐƠN"
     invoice_title = thdon.upper()
     khmshdon      = detail_json.get("khmshdon") or ""
     khhdon        = _esc(detail_json.get("khhdon") or "")
@@ -1006,8 +1006,13 @@ class ApiCrawlerEngine:
                     key = _dedup_key(inv, cat, self.account_id)
                     
                     if key in seen:
-                        logger.debug("Hóa đơn tồn tại trong dedup_key: {}", inv)
-                        logger.debug("Key: {}", key)
+                        logger.warning(
+                            "DEDUP: key={} invoice={} symbol={} date={}",
+                            key,
+                            inv.get("invoice_no"),
+                            inv.get("symbol"),
+                            inv.get("issue_date"),
+                        )
                     
                     if key not in seen:
                         seen.add(key)

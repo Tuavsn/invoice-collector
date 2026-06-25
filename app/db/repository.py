@@ -508,6 +508,8 @@ class SnapshotRepository:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         account_id: Optional[int] = None,
+        ghi_chu: Optional[str] = None,
+        thang_ke_khai: Optional[str] = None,
     ):
         """HĐ chưa chốt (snapshot_batch_id IS NULL), có filter + phân trang."""
         from datetime import timedelta
@@ -527,6 +529,10 @@ class SnapshotRepository:
             query = query.filter(Invoice.issue_date >= start_date)
         if end_date:
             query = query.filter(Invoice.issue_date < end_date + timedelta(days=1))
+        if ghi_chu:
+            query = query.filter(Invoice.ghi_chu.ilike(f"%{ghi_chu}%"))
+        if thang_ke_khai:
+            query = query.filter(Invoice.thang_ke_khai.ilike(f"%{thang_ke_khai}%"))
         query = query.order_by(desc(Invoice.created_at))
         return query.paginate(page=page, per_page=per_page, error_out=False)
 

@@ -46,8 +46,8 @@
   --text-inverse:   #ffffff;
 
   /* Typography */
-  --font-main:      'IBM Plex Sans', sans-serif;
-  --font-mono:      'IBM Plex Mono', monospace;
+  --font-main:      'Inter', -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:      'Inter', -apple-system, 'Segoe UI', sans-serif;
 
   /* Shadows */
   --shadow-xs:  0 1px 2px rgba(0,0,0,0.05);
@@ -981,7 +981,7 @@ hr { border-color: var(--border); }
 .snap-col-picker-wrap { position: relative; }
 .cat-picker-wrap { position: relative; }
 #year-export-wrap { display: flex; gap: 6px; align-items: center; }
-#sel-export-year { height: 28px; }
+#sel-export-year { height: 38px; }
 
 .snap-col-picker-menu {
   position: absolute;
